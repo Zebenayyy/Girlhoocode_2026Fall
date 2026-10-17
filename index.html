@@ -8,10 +8,33 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <canvas id="sky"></canvas>
+    <canvas id="scene"></canvas>
+    <canvas id="overlay"></canvas>
+
+    <div id="title-banner" class="title-banner">
+      <h1>HER SKY</h1>
+      <p>A journey to the edge of the universe, guided by the women who discovered it</p>
+    </div>
+
+    <div id="chapter" class="chapter">
+      <div class="chapter-step"></div>
+      <div class="chapter-name"></div>
+      <div class="chapter-distance"></div>
+    </div>
+
+    <div id="travel" class="travel">
+      <div class="travel-to"></div>
+      <div class="travel-distance"></div>
+    </div>
+
+    <div id="finale" class="finale">
+      <h2>Ten women. Ten discoveries.</h2>
+      <p>Each of them looked up and asked a question no one had answered.<br />What will you discover?</p>
+    </div>
 
     <div id="card" class="card"></div>
-    <div id="hint" class="hint">Point at the sky and hold still to hear its story</div>
+    <div id="hint" class="hint"></div>
+    <div id="progress" class="progress"></div>
     <div id="toast" class="toast"></div>
 
     <div id="start" class="start">
@@ -26,7 +49,11 @@
         <button id="mouse-btn">Mouse only</button>
       </div>
       <p id="start-status" class="status"></p>
-      <p class="keys">S settings · C camera view · F fullscreen · V voice on/off</p>
+      <p class="keys">S settings · C camera view · F fullscreen · V voice on/off · M flip left/right · R restart</p>
+      <p class="keys credits">
+        Images: NASA (Blue Marble, LRO, New Horizons), NASA/Goddard SVS Deep Star Maps (with ESA/Gaia/DPAC),<br />
+        Horsehead Nebula: NASA, ESA, and the Hubble Heritage Team (STScI/AURA)
+      </p>
     </div>
 
     <div id="settings" class="panel">
@@ -35,7 +62,7 @@
         Camera
         <select id="settings-camera"></select>
       </label>
-      <label class="check"><input type="checkbox" id="mirror" /> Mirror (camera faces the audience)</label>
+      <label class="check"><input type="checkbox" id="mirror" /> Flip left/right (M) if the cursor goes the wrong way</label>
       <label class="check"><input type="checkbox" id="voice" /> Read stories aloud</label>
       <div id="sliders"></div>
       <button id="reset-btn">Reset to defaults</button>

@@ -1,44 +1,73 @@
-import { OBJECTS } from './objects.js';
-import { createSky } from './sky.js';
+import { createStage } from './stage.js';
+import { createOverlay } from './overlay.js';
+import { createJourney } from './journey.js';
 import { createCard } from './card.js';
+import { STOPS } from './stops.js';
 import { createHandTracker, createPointer, listCameras, unlockCameraLabels } from './hands.js';
 import { DEFAULTS, SLIDERS, loadSettings, saveSettings } from './settings.js';
 
 const HAND_LOST_MS = 400; // hide the cursor this long after the hand disappears
 const MOUSE_ACTIVE_MS = 3000; // mouse cursor shows this long after the last move
-const IDLE_MS = 8000; // show the "point at the sky" hint after this long with no cursor
 
 const $ = (id) => document.getElementById(id);
 
 const settings = loadSettings();
-const sky = createSky($('sky'), OBJECTS);
-const card = createCard($('card'));
+const stage = createStage($('scene'));
+const overlay = createOverlay($('overlay'));
+const card = createCard($('card'), () => settings.voice);
 const tracker = createHandTracker($('video'));
 const pointer = createPointer();
+
+// ---------- on-screen text driven by the journey ----------
+STOPS.forEach(() => $('progress').appendChild(document.createElement('span')));
+
+let travelTimer = null;
+const ui = {
+  setTitle(on) { $('title-banner').classList.toggle('visible', on); },
+  setFinale(on) { $('finale').classList.toggle('visible', on); },
+  setProgress(i) {
+    [...$('progress').children].forEach((el, k) => el.classList.toggle('lit', k <= i));
+  },
+  setChapter(i) {
+    $('travel').classList.remove('visible');
+    if (i === null) { $('chapter').classList.remove('visible'); return; }
+    const s = STOPS[i];
+    $('chapter').querySelector('.chapter-step').textContent = `Stop ${i + 1} of ${STOPS.length}`;
+    $('chapter').querySelector('.chapter-name').textContent = s.name;
+    $('chapter').querySelector('.chapter-distance').textContent = s.distance;
+    $('chapter').classList.add('visible');
+  },
+  travel(name, distance = '') {
+    $('chapter').classList.remove('visible');
+    $('travel').querySelector('.travel-to').textContent = `Traveling to ${name}…`;
+    $('travel').querySelector('.travel-distance').textContent = distance;
+    $('travel').classList.add('visible');
+    clearTimeout(travelTimer);
+    travelTimer = setTimeout(() => $('travel').classList.remove('visible'), 2600);
+  },
+};
+
+const journey = createJourney({ stage, card, ui });
+if (import.meta.env.DEV) window.herSky = { journey }; // e.g. herSky.journey.jumpTo(5) in the console
 
 // ---------- interaction state ----------
 const cursor = { x: 0, y: 0, visible: false };
 const mouse = { x: 0, y: 0, at: -Infinity };
 let lastHandAt = -Infinity;
-let lastCursorAt = performance.now();
-let dwellId = null; // object the cursor is currently resting on
+let dwellId = null; // target the cursor is currently resting on
 let progress = 0; // 0..1 dwell progress on dwellId
-let lockedId = null; // just-selected object; must leave it before it can trigger again
-let selectedId = null; // object whose card is showing
+let lockedId = null; // just-selected target; must leave it before it can trigger again
 
-function select(obj) {
-  selectedId = obj.id;
-  lockedId = obj.id;
+function select(target) {
+  lockedId = target.id;
   progress = 0;
-  card.show(obj, sky.place(obj).x, sky.size().w, settings.voice);
+  target.onSelect();
 }
-
-$('card').addEventListener('hidden', () => { selectedId = null; });
 
 function updateCursor(now, dt) {
   const tip = tracker.fingertip;
   if (tip) {
-    const p = pointer.map(tip, settings, sky.size(), dt);
+    const p = pointer.map(tip, settings, stage.size(), dt);
     cursor.x = p.x;
     cursor.y = p.y;
     lastHandAt = now;
@@ -53,11 +82,10 @@ function updateCursor(now, dt) {
     cursor.y = mouse.y;
   }
   cursor.visible = handActive || mouseActive;
-  if (cursor.visible) lastCursorAt = now;
 }
 
-function updateDwell(dt) {
-  const hovered = cursor.visible ? sky.hitTest(cursor.x, cursor.y) : null;
+function updateDwell(dt, targets) {
+  const hovered = cursor.visible ? overlay.hitTest(targets, cursor.x, cursor.y) : null;
 
   if (!hovered || hovered.id !== lockedId) lockedId = null;
 
@@ -76,23 +104,23 @@ function updateDwell(dt) {
 
 // ---------- main loop ----------
 let last = performance.now();
+let lastHint = null;
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
+  const t = now / 1000;
 
   tracker.update();
   updateCursor(now, dt);
-  const hovered = updateDwell(dt);
-  const idle = now - lastCursorAt > IDLE_MS && !card.visible;
-  $('hint').classList.toggle('visible', idle && $('start').classList.contains('hidden'));
+  journey.update(t, dt, cursor.visible);
+  const targets = journey.targets();
+  const hovered = updateDwell(dt, targets);
 
-  sky.draw(now / 1000, {
-    hoveredId: hovered?.id ?? null,
-    selectedId,
-    progress,
-    cursor,
-    idle,
-  });
+  const hint = journey.hint();
+  if (hint !== lastHint) { $('hint').textContent = hint; lastHint = hint; }
+
+  stage.render();
+  overlay.draw({ t, targets, hoveredId: hovered?.id ?? null, progress, cursor });
   if ($('preview').classList.contains('visible')) drawPreview();
 
   requestAnimationFrame(frame);
@@ -144,12 +172,11 @@ window.addEventListener('mousemove', (e) => {
   mouse.at = performance.now();
 });
 
-$('sky').addEventListener('click', (e) => {
-  const obj = sky.hitTest(e.clientX, e.clientY);
-  if (obj) select(obj);
-  else card.hide();
+// a click selects right away, no holding needed
+$('scene').addEventListener('click', (e) => {
+  const target = overlay.hitTest(journey.targets(), e.clientX, e.clientY);
+  if (target) select(target);
 });
-$('card').addEventListener('click', () => card.hide());
 
 // ---------- keyboard ----------
 window.addEventListener('keydown', (e) => {
@@ -159,7 +186,8 @@ window.addEventListener('keydown', (e) => {
   else if (key === 'c') $('preview').classList.toggle('visible');
   else if (key === 'f') toggleFullscreen();
   else if (key === 'v') setVoice(!settings.voice);
-  else if (key === 'escape') card.hide();
+  else if (key === 'm') setMirror(!settings.mirror);
+  else if (key === 'r') journey.reset();
 });
 
 function toggleFullscreen() {
@@ -245,7 +273,15 @@ $('start-btn').addEventListener('click', async () => {
 $('mouse-btn').addEventListener('click', () => $('start').classList.add('hidden'));
 
 // ---------- settings panel ----------
-$('mirror').addEventListener('change', (e) => { settings.mirror = e.target.checked; saveSettings(settings); });
+function setMirror(on) {
+  settings.mirror = on;
+  $('mirror').checked = on;
+  pointer.reset();
+  saveSettings(settings);
+  toast(on ? 'Left/right flipped' : 'Left/right normal');
+}
+
+$('mirror').addEventListener('change', (e) => setMirror(e.target.checked));
 $('voice').addEventListener('change', (e) => setVoice(e.target.checked));
 
 function buildSettingsPanel() {
