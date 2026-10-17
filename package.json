@@ -1,19 +1,19 @@
 {
-  "name": "fit-for-orbit",
+  "name": "her-sky",
   "private": true,
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-wasm.mjs",
     "dev": "vite",
-    "dev:quest": "vite --host --mode quest",
+    "prebuild": "node scripts/copy-wasm.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.186.1"
+    "@mediapipe/tasks-vision": "^1.1.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "vite": "^8.3.4"
   }
 }

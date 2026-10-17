@@ -3,22 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fit for Orbit</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-      #title {
-        position: absolute; top: 24px; width: 100%; text-align: center;
-        color: #fff; font-family: system-ui, sans-serif; pointer-events: none;
-      }
-      #title h1 { margin: 0; font-size: 28px; letter-spacing: 0.1em; }
-      #title p { margin: 6px 0 0; opacity: 0.7; }
-    </style>
+    <title>Her Sky</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="title">
-      <h1>FIT FOR ORBIT</h1>
-      <p>Put on your headset and press Enter VR</p>
+    <canvas id="sky"></canvas>
+
+    <div id="card" class="card"></div>
+    <div id="hint" class="hint">Point at the sky and hold still to hear its story</div>
+    <div id="toast" class="toast"></div>
+
+    <div id="start" class="start">
+      <h1>HER SKY</h1>
+      <p class="sub">The women behind the stars</p>
+      <label class="field">
+        Camera
+        <select id="start-camera"></select>
+      </label>
+      <div class="row">
+        <button id="start-btn" class="primary">Start</button>
+        <button id="mouse-btn">Mouse only</button>
+      </div>
+      <p id="start-status" class="status"></p>
+      <p class="keys">S settings · C camera view · F fullscreen · V voice on/off</p>
     </div>
+
+    <div id="settings" class="panel">
+      <h2>Settings</h2>
+      <label class="field">
+        Camera
+        <select id="settings-camera"></select>
+      </label>
+      <label class="check"><input type="checkbox" id="mirror" /> Mirror (camera faces the audience)</label>
+      <label class="check"><input type="checkbox" id="voice" /> Read stories aloud</label>
+      <div id="sliders"></div>
+      <button id="reset-btn">Reset to defaults</button>
+      <p class="keys">The yellow box in the camera view (C) is the reach area.<br />Press S to close.</p>
+    </div>
+
+    <div id="preview" class="preview">
+      <canvas id="preview-canvas" width="320" height="180"></canvas>
+    </div>
+    <video id="video" playsinline muted></video>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -1,26 +1,285 @@
-import * as THREE from 'three';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { createRenderer } from './core/renderer.js';
-import { createSpace } from './world/space.js';
+import { OBJECTS } from './objects.js';
+import { createSky } from './sky.js';
+import { createCard } from './card.js';
+import { createHandTracker, createPointer, listCameras, unlockCameraLabels } from './hands.js';
+import { DEFAULTS, SLIDERS, loadSettings, saveSettings } from './settings.js';
 
-const renderer = createRenderer();
-document.body.appendChild(VRButton.createButton(renderer));
+const HAND_LOST_MS = 400; // hide the cursor this long after the hand disappears
+const MOUSE_ACTIVE_MS = 3000; // mouse cursor shows this long after the last move
+const IDLE_MS = 8000; // show the "point at the sky" hint after this long with no cursor
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 1000);
-camera.position.set(0, 1.6, 0); // desktop preview; in VR the headset drives the camera
+const $ = (id) => document.getElementById(id);
 
-const space = createSpace(scene);
+const settings = loadSettings();
+const sky = createSky($('sky'), OBJECTS);
+const card = createCard($('card'));
+const tracker = createHandTracker($('video'));
+const pointer = createPointer();
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+// ---------- interaction state ----------
+const cursor = { x: 0, y: 0, visible: false };
+const mouse = { x: 0, y: 0, at: -Infinity };
+let lastHandAt = -Infinity;
+let lastCursorAt = performance.now();
+let dwellId = null; // object the cursor is currently resting on
+let progress = 0; // 0..1 dwell progress on dwellId
+let lockedId = null; // just-selected object; must leave it before it can trigger again
+let selectedId = null; // object whose card is showing
+
+function select(obj) {
+  selectedId = obj.id;
+  lockedId = obj.id;
+  progress = 0;
+  card.show(obj, sky.place(obj).x, sky.size().w, settings.voice);
+}
+
+$('card').addEventListener('hidden', () => { selectedId = null; });
+
+function updateCursor(now, dt) {
+  const tip = tracker.fingertip;
+  if (tip) {
+    const p = pointer.map(tip, settings, sky.size(), dt);
+    cursor.x = p.x;
+    cursor.y = p.y;
+    lastHandAt = now;
+  } else if (now - lastHandAt > HAND_LOST_MS) {
+    pointer.reset();
+  }
+
+  const handActive = now - lastHandAt <= HAND_LOST_MS;
+  const mouseActive = now - mouse.at <= MOUSE_ACTIVE_MS;
+  if (!handActive && mouseActive) {
+    cursor.x = mouse.x;
+    cursor.y = mouse.y;
+  }
+  cursor.visible = handActive || mouseActive;
+  if (cursor.visible) lastCursorAt = now;
+}
+
+function updateDwell(dt) {
+  const hovered = cursor.visible ? sky.hitTest(cursor.x, cursor.y) : null;
+
+  if (!hovered || hovered.id !== lockedId) lockedId = null;
+
+  if (!hovered || hovered.id === lockedId) {
+    dwellId = null;
+    progress = 0;
+  } else if (hovered.id !== dwellId) {
+    dwellId = hovered.id;
+    progress = 0;
+  } else {
+    progress += dt / settings.holdTime;
+    if (progress >= 1) select(hovered);
+  }
+  return hovered;
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+
+  tracker.update();
+  updateCursor(now, dt);
+  const hovered = updateDwell(dt);
+  const idle = now - lastCursorAt > IDLE_MS && !card.visible;
+  $('hint').classList.toggle('visible', idle && $('start').classList.contains('hidden'));
+
+  sky.draw(now / 1000, {
+    hoveredId: hovered?.id ?? null,
+    selectedId,
+    progress,
+    cursor,
+    idle,
+  });
+  if ($('preview').classList.contains('visible')) drawPreview();
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- camera preview (press C) ----------
+const pctx = $('preview-canvas').getContext('2d');
+function drawPreview() {
+  const { width: pw, height: ph } = pctx.canvas;
+  const video = $('video');
+  pctx.fillStyle = '#000';
+  pctx.fillRect(0, 0, pw, ph);
+  if (tracker.running) {
+    pctx.save();
+    if (settings.mirror) { pctx.translate(pw, 0); pctx.scale(-1, 1); }
+    pctx.drawImage(video, 0, 0, pw, ph);
+    pctx.restore();
+  }
+  // reach box (defined in the mirrored view)
+  pctx.strokeStyle = '#ffd36b';
+  pctx.lineWidth = 2;
+  pctx.strokeRect(
+    (settings.boxX - settings.boxW / 2) * pw,
+    (settings.boxY - settings.boxH / 2) * ph,
+    settings.boxW * pw,
+    settings.boxH * ph,
+  );
+  const lm = tracker.landmarks;
+  if (lm) {
+    lm.forEach((p, i) => {
+      const x = (settings.mirror ? 1 - p.x : p.x) * pw;
+      pctx.fillStyle = i === 8 ? '#ffd36b' : '#7fd1ff';
+      pctx.beginPath();
+      pctx.arc(x, p.y * ph, i === 8 ? 5 : 2.5, 0, Math.PI * 2);
+      pctx.fill();
+    });
+  } else if (!tracker.running) {
+    pctx.fillStyle = '#fff';
+    pctx.font = '14px system-ui';
+    pctx.fillText('No camera running', 10, 22);
+  }
+}
+
+// ---------- mouse fallback ----------
+window.addEventListener('mousemove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+  mouse.at = performance.now();
 });
 
-const clock = new THREE.Clock();
-renderer.setAnimationLoop(() => {
-  const dt = clock.getDelta();
-  space.update(dt);
-  renderer.render(scene, camera);
+$('sky').addEventListener('click', (e) => {
+  const obj = sky.hitTest(e.clientX, e.clientY);
+  if (obj) select(obj);
+  else card.hide();
 });
+$('card').addEventListener('click', () => card.hide());
+
+// ---------- keyboard ----------
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  const key = e.key.toLowerCase();
+  if (key === 's') $('settings').classList.toggle('visible');
+  else if (key === 'c') $('preview').classList.toggle('visible');
+  else if (key === 'f') toggleFullscreen();
+  else if (key === 'v') setVoice(!settings.voice);
+  else if (key === 'escape') card.hide();
+});
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+
+let toastTimer = null;
+function toast(msg) {
+  $('toast').textContent = msg;
+  $('toast').classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 1800);
+}
+
+function setVoice(on) {
+  settings.voice = on;
+  $('voice').checked = on;
+  if (!on) window.speechSynthesis?.cancel();
+  saveSettings(settings);
+  toast(on ? 'Voice on' : 'Voice off');
+}
+
+// ---------- camera lists ----------
+async function fillCameraSelects() {
+  let cams = [];
+  try { cams = await listCameras(); } catch { /* no camera API */ }
+  // prefer the saved camera, then anything that looks like the iPhone
+  const preferred =
+    cams.find((c) => c.deviceId === settings.cameraId) ||
+    cams.find((c) => /ivcam|iphone|camo/i.test(c.label)) ||
+    cams[0];
+  for (const sel of [$('start-camera'), $('settings-camera')]) {
+    sel.innerHTML = '';
+    cams.forEach((c, i) => {
+      const opt = document.createElement('option');
+      opt.value = c.deviceId;
+      opt.textContent = c.label || `Camera ${i + 1}`;
+      sel.appendChild(opt);
+    });
+    if (preferred) sel.value = preferred.deviceId;
+  }
+}
+
+async function switchCamera(deviceId) {
+  settings.cameraId = deviceId;
+  saveSettings(settings);
+  try {
+    await tracker.start(deviceId);
+    toast('Camera switched');
+  } catch (err) {
+    toast(`Camera error: ${err.message}`);
+  }
+}
+$('settings-camera').addEventListener('change', (e) => switchCamera(e.target.value));
+
+// ---------- start screen ----------
+$('start-btn').addEventListener('click', async () => {
+  const status = $('start-status');
+  $('start-btn').disabled = true;
+  try {
+    status.textContent = 'Asking for camera access…';
+    const hadLabels = (await listCameras()).some((c) => c.label);
+    if (!hadLabels) {
+      await unlockCameraLabels();
+      await fillCameraSelects();
+    }
+    status.textContent = 'Loading hand tracker…';
+    await tracker.load();
+    const deviceId = $('start-camera').value;
+    settings.cameraId = deviceId;
+    saveSettings(settings);
+    $('settings-camera').value = deviceId;
+    await tracker.start(deviceId);
+    $('start').classList.add('hidden');
+  } catch (err) {
+    console.error(err);
+    status.textContent = `Couldn't start: ${err.message}. Check the camera, or use Mouse only.`;
+    $('start-btn').disabled = false;
+  }
+});
+
+$('mouse-btn').addEventListener('click', () => $('start').classList.add('hidden'));
+
+// ---------- settings panel ----------
+$('mirror').addEventListener('change', (e) => { settings.mirror = e.target.checked; saveSettings(settings); });
+$('voice').addEventListener('change', (e) => setVoice(e.target.checked));
+
+function buildSettingsPanel() {
+  $('mirror').checked = settings.mirror;
+  $('voice').checked = settings.voice;
+
+  const wrap = $('sliders');
+  wrap.innerHTML = '';
+  for (const s of SLIDERS) {
+    const row = document.createElement('div');
+    row.className = 'slider';
+    row.innerHTML = `
+      <div class="slider-head"><span>${s.label}</span><span class="val"></span></div>
+      <input type="range" min="${s.min}" max="${s.max}" step="${s.step}" />`;
+    const input = row.querySelector('input');
+    const val = row.querySelector('.val');
+    input.value = settings[s.key];
+    val.textContent = settings[s.key];
+    input.addEventListener('input', () => {
+      settings[s.key] = parseFloat(input.value);
+      val.textContent = input.value;
+      saveSettings(settings);
+    });
+    wrap.appendChild(row);
+  }
+}
+
+$('reset-btn').addEventListener('click', () => {
+  const cameraId = settings.cameraId;
+  Object.assign(settings, DEFAULTS, { cameraId });
+  saveSettings(settings);
+  buildSettingsPanel();
+  toast('Settings reset');
+});
+
+buildSettingsPanel();
+fillCameraSelects();
