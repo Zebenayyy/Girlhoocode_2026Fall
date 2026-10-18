@@ -1,10 +1,11 @@
-"""Record every stop's story with a soft, natural-sounding voice.
+"""Record every stop's story, and every solar-system fact, with a soft, natural-sounding voice.
 
 Uses Piper (free, open-source, runs offline) with the "LJ Speech" female voice, which was
-trained on public-domain recordings. Writes public/audio/<stop id>.mp3; the game plays
-those instead of the browser's robotic voice.
+trained on public-domain recordings. Writes public/audio/<stop id>.mp3 (journey stories) and
+public/audio/solar/<planet or mission>.mp3 (solar-system facts); the game plays those instead
+of the browser's robotic voice.
 
-Run again whenever you change a story in src/stops.js:
+Run again whenever you change a story in src/stops.js or a fact in src/solar-facts.js:
 
     python -m pip install --user piper-tts lameenc
     python scripts/make-voice.py
@@ -41,10 +42,11 @@ def download_voice():
 
 
 def spoken_lines():
-    """Ask Node for each stop's spoken text, using the same rule the game uses."""
+    """Ask Node for every line to record, using the same text the game reads."""
     script = (
-        "import('./src/stops.js').then(m => console.log(JSON.stringify("
-        "m.STOPS.map(s => ({ id: s.id, text: m.spokenText(s) })))))"
+        "Promise.all([import('./src/stops.js'), import('./src/solar-facts.js')]).then(([s, f]) =>"
+        " console.log(JSON.stringify([...s.STOPS.map(x => ({ file: x.id, text: s.spokenText(x) })),"
+        " ...f.solarNarrations().map(x => ({ file: 'solar/' + x.id, text: x.text }))])))"
     )
     out = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True, check=True)
     return json.loads(out.stdout)
@@ -61,14 +63,15 @@ def to_mp3(pcm: bytes, rate: int) -> bytes:
 
 def main():
     voice = PiperVoice.load(download_voice())
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
     for line in spoken_lines():
         pcm, rate = b"", 22050
         for chunk in voice.synthesize(line["text"], syn_config=SETTINGS):  # one chunk per sentence
             rate = chunk.sample_rate
             pcm += chunk.audio_int16_bytes + b"\x00\x00" * int(rate * PAUSE_SECONDS)
-        (OUT_DIR / f"{line['id']}.mp3").write_bytes(to_mp3(pcm, rate))
-        print(f"{line['id']}.mp3  {len(pcm) / 2 / rate:.1f}s  {line['text'][:60]}…")
+        out = OUT_DIR / f"{line['file']}.mp3"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(to_mp3(pcm, rate))
+        print(f"{line['file']}.mp3  {len(pcm) / 2 / rate:.1f}s")
 
 
 if __name__ == "__main__":

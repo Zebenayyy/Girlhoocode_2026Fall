@@ -121,5 +121,15 @@ export function createCard(el, settings) {
     speak('Hello! I will be your guide on this journey through Her Sky.', () => {});
   }
 
-  return { show, hide, test, get visible() { return el.classList.contains('visible'); } };
+  // Read something aloud outside the story card (the solar-system facts): plays the recording
+  // at `src` if there is one, otherwise the browser voice. `force` plays it even with voice off.
+  function narrate(src, text, { force = false } = {}) {
+    stopSound();
+    if (!settings.voice && !force) return;
+    const mine = (audio = new Audio(src));
+    mine.onerror = () => { if (audio === mine) speak(text, () => {}); };
+    mine.play().catch(() => {}); // a missing file is handled by onerror
+  }
+
+  return { show, hide, test, narrate, silence: stopSound, get visible() { return el.classList.contains('visible'); } };
 }

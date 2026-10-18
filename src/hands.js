@@ -73,17 +73,6 @@ export function createHandTracker(video) {
     lastDetectionAt = -Infinity;
   }
 
-  function getPinchDistance() {
-    if (!landmarks) return Infinity;
-    const thumb = landmarks[4];
-    const index = landmarks[8];
-    const wrist = landmarks[0];
-    const middleBase = landmarks[9];
-    const palmLength = Math.hypot(wrist.x - middleBase.x, wrist.y - middleBase.y);
-    return palmLength > 0
-      ? Math.hypot(thumb.x - index.x, thumb.y - index.y) / palmLength
-      : Infinity;
-  }
 
   // Call every frame. Only runs detection when the camera has a new frame.
   function update() {
@@ -106,7 +95,6 @@ export function createHandTracker(video) {
     update,
     get fingertip() { return latest; },
     get landmarks() { return landmarks; },
-    get pinching() { return getPinchDistance() < 0.35; },
     get running() { return !!stream; },
     get loaded() { return !!landmarker; },
     // a one-line status for the camera preview

@@ -1,5 +1,10 @@
+// Solar-system explorer (by Kiwakibt): the 8 planets, three spacecraft missions, and facts.
+// Pointing works exactly like the journey: the main cursor, point-and-hold (or click) on a
+// planet or spacecraft to fly to it, and a "Back to the Solar System" light to return.
+// Facts are read with the same recorded voice as the journey (public/audio/solar/).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { PLANET_FACTS, MISSION_FACTS, audioId, narrationFor } from './solar-facts.js';
 
 const BASE = import.meta.env.BASE_URL;
 const loader = new THREE.TextureLoader();
@@ -15,63 +20,12 @@ const PLANETS = [
   { name: 'Neptune', texture: 'neptune.jpg', radius: 4.8, orbit: 91, speed: 0.1, spin: 0.8 },
 ];
 
-const PLANET_FACTS = {
-  Mercury: {
-    facts: ['A year on Mercury lasts 88 Earth days.', 'Mercury has no moons.'],
-    source: 'https://science.nasa.gov/mercury/facts/',
-  },
-  Venus: {
-    facts: ['Venus is the hottest planet in our solar system.', 'It rotates in the opposite direction from most planets.'],
-    source: 'https://science.nasa.gov/venus/venus-facts/',
-  },
-  Earth: {
-    facts: ['Earth is the only world known to host life.', 'It is the only planet in our solar system with liquid water on its surface.'],
-    source: 'https://science.nasa.gov/earth/facts/',
-  },
-  Mars: {
-    facts: ['Mars gets its red color from iron minerals that have rusted.', 'It has two small moons: Phobos and Deimos.'],
-    source: 'https://science.nasa.gov/mars/facts/',
-  },
-  Jupiter: {
-    facts: ['Jupiter is the largest planet in our solar system.', 'Its Great Red Spot is a storm larger than Earth.'],
-    source: 'https://science.nasa.gov/jupiter/jupiter-facts/',
-  },
-  Saturn: {
-    facts: ['Saturn’s rings are made mostly of pieces of ice and rock.', 'A day on Saturn lasts about 10.7 hours.'],
-    source: 'https://science.nasa.gov/saturn/facts/',
-  },
-  Uranus: {
-    facts: ['Uranus rotates at a tilt of about 98 degrees, appearing to spin on its side.', 'It takes about 84 Earth years to orbit the Sun.'],
-    source: 'https://science.nasa.gov/uranus/facts/',
-  },
-  Neptune: {
-    facts: ['Neptune takes about 165 Earth years to orbit the Sun.', 'It has supersonic winds.'],
-    source: 'https://science.nasa.gov/neptune/neptune-facts/',
-  },
-};
-
 const MISSIONS = [
-  {
-    name: 'Perseverance',
-    planet: 'Mars',
-    offset: [4.5, 2.2, 0],
-    facts: ['NASA’s rover landed on Mars on Feb. 18, 2021.', 'It is exploring an ancient lakebed and collecting rock samples.'],
-    source: 'https://science.nasa.gov/mission/mars-2020-perseverance/',
-  },
-  {
-    name: 'Cassini',
-    planet: 'Saturn',
-    offset: [17, 3, 0],
-    facts: ['Cassini studied Saturn and its moons from orbit for 13 years.', 'Its Huygens probe landed on Saturn’s moon Titan in 2005.'],
-    source: 'https://science.nasa.gov/mission/cassini/',
-  },
-  {
-    name: 'Voyager 1',
-    position: [116, 0, 0],
-    facts: ['Voyager 1 entered interstellar space in 2012.', 'It launched in 1977 and is the most distant human-made object.'],
-    source: 'https://science.nasa.gov/mission/voyager/',
-  },
+  { name: 'Perseverance', planet: 'Mars', offset: [4.5, 2.2, 0] },
+  { name: 'Cassini', planet: 'Saturn', offset: [17, 3, 0] },
+  { name: 'Voyager 1', position: [116, 0, 0] },
 ];
+const PROBE_RADIUS = 3; // rough size of a spacecraft, for pointing at it
 
 function createProbe() {
   const probe = new THREE.Group();
@@ -89,9 +43,6 @@ function createProbe() {
   antenna.position.z = -1.05;
   antenna.rotation.x = Math.PI / 2;
   probe.add(antenna);
-  probe.traverse((object) => {
-    if (object.isMesh) object.userData.missionProbe = true;
-  });
   probe.scale.setScalar(1.15);
   return probe;
 }
@@ -106,7 +57,7 @@ function loadTexture(file) {
   return texture;
 }
 
-export function createSolarSystem(stage, getVoiceOn = () => false) {
+export function createSolarSystem(stage, narrator) {
   const { scene, camera, renderer } = stage;
   const journeyFarPlane = camera.far;
   const group = new THREE.Group();
@@ -200,11 +151,12 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
       const probe = createProbe();
       probe.name = mission.name;
       anchor.add(probe);
-      return { ...mission, anchor, probe };
+      return { ...mission, ...MISSION_FACTS[mission.name], anchor, probe };
     });
     built = true;
   }
 
+  // mouse users can still drag to orbit the view
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
@@ -218,65 +170,27 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
   const orbitSpeed = document.getElementById('solar-orbit-speed');
   const spinSpeed = document.getElementById('solar-spin-speed');
   const focusStatus = document.getElementById('solar-focus-status');
-  const focusTarget = new THREE.Vector3();
-  const focusDelta = new THREE.Vector3();
-  const raycaster = new THREE.Raycaster();
-  const pointerNdc = new THREE.Vector2();
-  const cameraOffset = new THREE.Vector3();
-  const spherical = new THREE.Spherical();
-  const overviewTarget = new THREE.Vector3();
-  const handCursor = document.getElementById('solar-cursor');
-  const hoverLabel = document.getElementById('solar-hover-label');
   const infoCard = document.getElementById('solar-planet-info');
   const infoTitle = document.getElementById('solar-planet-info-title');
   const infoFacts = document.getElementById('solar-planet-info-facts');
   const infoSource = document.getElementById('solar-planet-info-source');
   const infoSpeak = document.getElementById('solar-planet-info-speak');
-  let previousHand = null;
-  let handPinching = false;
-  let hoveredPlanet = null;
-  let hoverTime = 0;
-  let dwellFired = false;
+  const focusTarget = new THREE.Vector3();
+  const focusDelta = new THREE.Vector3();
+  const cameraOffset = new THREE.Vector3();
+  const spherical = new THREE.Spherical();
+  const overviewTarget = new THREE.Vector3();
+  const tmp = new THREE.Vector3();
   let focusZoomDistance = null;
   let overviewDistance = 224;
-  let focusedPlanetHoverArmed = false;
-  let suppressDwellPlanet = null;
   let returningToOverview = false;
   let active = false;
-  const mousePointer = { active: false, x: 0, y: 0 };
-  let pointerDown = null;
-  let infoPlanet = null;
+  let infoName = null;
   let selectedMissionName = null;
   let infoAnchor = null;
   let infoNarration = '';
 
-  renderer.domElement.addEventListener('pointermove', (event) => {
-    mousePointer.active = true;
-    mousePointer.x = event.clientX;
-    mousePointer.y = event.clientY;
-  });
-  renderer.domElement.addEventListener('pointerdown', (event) => {
-    if (event.button === 0) pointerDown = { x: event.clientX, y: event.clientY };
-  });
-  renderer.domElement.addEventListener('pointerup', (event) => {
-    if (!pointerDown) return;
-    const moved = Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y);
-    pointerDown = null;
-    if (moved > 6) return;
-    const item = itemAt(event.clientX, event.clientY);
-    if (item?.type === 'planet') {
-      focus.value = item.name;
-      focus.dispatchEvent(new Event('change'));
-    } else if (item?.type === 'mission') {
-      missionSelect.value = item.name;
-      missionSelect.dispatchEvent(new Event('change'));
-    }
-  });
-  renderer.domElement.addEventListener('pointerleave', () => {
-    mousePointer.active = false;
-    pointerDown = null;
-    if (focus.value !== 'none') focusedPlanetHoverArmed = true;
-  });
+  const IDLE_STATUS = 'Point at a planet or spacecraft and hold to fly to it';
 
   function start() {
     buildWorld();
@@ -293,15 +207,13 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
     focus.value = 'none';
     missionSelect.value = 'none';
     selectedMissionName = null;
-    infoPlanet = null;
+    infoName = null;
     infoAnchor = null;
     infoCard.hidden = true;
-    window.speechSynthesis?.cancel();
+    narrator.silence();
     focusZoomDistance = null;
-    focusedPlanetHoverArmed = false;
-    suppressDwellPlanet = null;
     returningToOverview = false;
-    focusStatus.textContent = 'Point and hold over a planet or spacecraft for 2 seconds to select';
+    focusStatus.textContent = IDLE_STATUS;
   }
 
   function stop() {
@@ -310,92 +222,68 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
     controls.enabled = false;
     camera.far = journeyFarPlane;
     camera.updateProjectionMatrix();
-    previousHand = null;
-    handPinching = false;
-    hoveredPlanet = null;
-    hoverTime = 0;
-    dwellFired = false;
-    focusedPlanetHoverArmed = false;
-    suppressDwellPlanet = null;
     returningToOverview = false;
     focusZoomDistance = null;
-    handCursor.classList.remove('pinching');
-    handCursor.classList.remove('hovering');
-    handCursor.style.display = 'none';
-    hoverLabel.style.display = 'none';
     infoCard.hidden = true;
-    infoPlanet = null;
-    window.speechSynthesis?.cancel();
+    infoName = null;
+    narrator.silence();
   }
 
-  function resetHover() {
-    hoveredPlanet = null;
-    hoverTime = 0;
-    dwellFired = false;
-    handCursor.classList.remove('hovering');
-    handCursor.style.removeProperty('--dwell-progress');
-    hoverLabel.style.display = 'none';
-    focusStatus.textContent = selectedMissionName
-      ? `Exploring ${selectedMissionName} · Hover over it again to return`
-      : focus.value === 'none'
-        ? 'Point and hold over a planet or spacecraft for 2 seconds to select'
-        : `Following ${focus.value} · Hold over another item for 2 seconds to select`;
+  function selectPlanet(name) {
+    focus.value = name;
+    focus.dispatchEvent(new Event('change'));
   }
 
-  function itemAt(x, y) {
-    const { w, h } = stage.size();
-    pointerNdc.set((x / w) * 2 - 1, 1 - (y / h) * 2);
-    raycaster.setFromCamera(pointerNdc, camera);
-    const hit = raycaster.intersectObjects([
-      ...orbits.map((entry) => entry.body),
-      ...missions.map((entry) => entry.probe),
-    ], true)[0];
-    if (hit) {
-      const mission = missions.find((entry) => {
-        let object = hit.object;
-        while (object) {
-          if (object === entry.probe) return true;
-          object = object.parent;
-        }
-        return false;
-      });
-      if (mission) return { type: 'mission', ...mission };
-      const planet = orbits.find((entry) => entry.body === hit.object);
-      if (planet) return { type: 'planet', ...planet };
-    }
-
-    let nearest = null;
-    let nearestRatio = Infinity;
-    for (const planet of orbits) {
-      planet.body.getWorldPosition(focusTarget);
-      const projected = stage.project(focusTarget);
-      if (!projected.visible) continue;
-      const radius = stage.screenRadius(focusTarget, planet.radius);
-      const distance = Math.hypot(x - projected.x, y - projected.y);
-      const ratio = distance / Math.max(radius * 1.4, 26);
-      if (ratio <= 1 && ratio < nearestRatio) {
-        nearest = { type: 'planet', ...planet };
-        nearestRatio = ratio;
-      }
-    }
-    return nearest;
-  }
-
-  function selectItem(item) {
-    if (item.type === 'planet') {
-      focus.value = item.name;
-      focus.dispatchEvent(new Event('change'));
-      return;
-    }
-    missionSelect.value = item.name;
+  function selectMission(name) {
+    missionSelect.value = name;
     missionSelect.dispatchEvent(new Event('change'));
   }
 
+  function backToOverview() {
+    focus.value = 'none';
+    missionSelect.value = 'none';
+    selectedMissionName = null;
+    focus.dispatchEvent(new Event('change'));
+  }
+
+  // ---------- pointing targets (same format as the journey's) ----------
+  function targetFor(id, label, worldPos, radius, onSelect) {
+    const p = stage.project(worldPos);
+    if (!p.visible) return null;
+    const { w, h } = stage.size();
+    const r = Math.max(stage.screenRadius(worldPos, radius) * 1.15, Math.min(w, h) * 0.035);
+    // quiet: the overview has many planets, so only show a ring on the one you're pointing at
+    return { id, kind: 'object', quiet: true, label, x: p.x, y: p.y, r, onSelect };
+  }
+
+  function targets() {
+    if (!active) return [];
+    const list = [];
+    for (const planet of orbits) {
+      if (planet.name === focus.value) continue;
+      planet.body.getWorldPosition(tmp);
+      list.push(targetFor(`solar-${planet.name}`, planet.name, tmp, planet.radius, () => selectPlanet(planet.name)));
+    }
+    for (const mission of missions) {
+      if (mission.name === selectedMissionName) continue;
+      mission.anchor.getWorldPosition(tmp);
+      list.push(targetFor(`solar-${mission.name}`, mission.name, tmp, PROBE_RADIUS, () => selectMission(mission.name)));
+    }
+    if (focus.value !== 'none' || selectedMissionName) {
+      const { w, h } = stage.size();
+      list.push({
+        id: 'solar-back', kind: 'beacon', label: 'Back to the Solar System',
+        x: w * 0.5, y: h * 0.84, r: Math.min(w, h) * 0.055, onSelect: backToOverview,
+      });
+    }
+    return list.filter(Boolean);
+  }
+
+  // ---------- fact card + soft recorded voice ----------
   function showInfo(name, details, anchor) {
-    window.speechSynthesis?.cancel();
-    infoPlanet = name;
+    infoName = name;
     infoAnchor = anchor;
-    infoNarration = `${name}. ${details.facts.join(' ')}`;
+    infoNarration = narrationFor(name, details);
     infoTitle.textContent = name;
     infoFacts.replaceChildren(...details.facts.map((fact) => {
       const item = document.createElement('li');
@@ -404,128 +292,17 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
     }));
     infoSource.href = details.source;
     infoCard.hidden = false;
-    if (getVoiceOn()) speakInfo();
+    speakInfo();
   }
 
-  function speakInfo() {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(infoNarration);
-    utterance.rate = 0.98;
-    window.speechSynthesis.speak(utterance);
+  function speakInfo(force = false) {
+    if (!infoName) return;
+    narrator.narrate(`${BASE}audio/solar/${audioId(infoName)}.mp3`, infoNarration, { force });
   }
 
-  function updatePlanetHover(x, y, dt, allowFocus) {
-    const item = itemAt(x, y);
-    if (item?.name !== hoveredPlanet) {
-      hoveredPlanet = item?.name ?? null;
-      hoverTime = 0;
-      dwellFired = false;
-      if ((focus.value !== 'none' || selectedMissionName) && item?.name !== (selectedMissionName ?? focus.value)) {
-        focusedPlanetHoverArmed = true;
-      }
-    }
-    if (!item) {
-      suppressDwellPlanet = null;
-      resetHover();
-      return;
-    }
-
-    hoverLabel.textContent = item.name;
-    hoverLabel.style.left = `${Math.min(x + 18, window.innerWidth - 220)}px`;
-    hoverLabel.style.top = `${Math.min(y + 18, window.innerHeight - 48)}px`;
-    hoverLabel.style.display = 'block';
-
-    if (item.name === (selectedMissionName ?? focus.value) && focusedPlanetHoverArmed) {
-      const releasedPlanet = item.name;
-      focus.value = 'none';
-      missionSelect.value = 'none';
-      selectedMissionName = null;
-      focus.dispatchEvent(new Event('change'));
-      suppressDwellPlanet = releasedPlanet;
-      focusedPlanetHoverArmed = false;
-      dwellFired = true;
-      hoverLabel.textContent = `${releasedPlanet} · Returning to Solar System`;
-      return;
-    }
-    if (item.name === suppressDwellPlanet) return;
-    if (!allowFocus || dwellFired) return;
-    handCursor.classList.add('hovering');
-    hoverTime += dt;
-    handCursor.style.setProperty('--dwell-progress', `${Math.min(hoverTime / 2, 1) * 100}%`);
-    hoverLabel.textContent = `${item.name} · Hold ${Math.max(0, 2 - hoverTime).toFixed(1)}s to select`;
-    focusStatus.textContent = `Hold over ${item.name} for ${Math.max(0, 2 - hoverTime).toFixed(1)} seconds to select`;
-    if (hoverTime >= 2) {
-      selectItem(item);
-      dwellFired = true;
-      hoverLabel.textContent = `${item.name} · Selected`;
-    }
-  }
-
-  function orbitFromHand(hand, dt) {
-    if (!hand?.active) {
-      handPinching = false;
-      previousHand = null;
-      handCursor.classList.remove('pinching');
-      if (mousePointer.active) {
-        handCursor.style.display = 'none';
-        updatePlanetHover(mousePointer.x, mousePointer.y, dt, false);
-      } else {
-        resetHover();
-      }
-      return;
-    }
-
-    if (!handPinching && hand.pinch) {
-      handPinching = true;
-      previousHand = { x: hand.x, y: hand.y };
-    } else if (handPinching && !hand.pinch) {
-      handPinching = false;
-      previousHand = null;
-      handCursor.classList.remove('pinching');
-      hoverLabel.style.display = 'none';
-      resetHover();
-      return;
-    }
-
-    if (handPinching) {
-      resetHover();
-      hoverLabel.style.display = 'none';
-      handCursor.style.left = `${hand.x}px`;
-      handCursor.style.top = `${hand.y}px`;
-      handCursor.classList.add('pinching');
-      if (!previousHand) {
-        previousHand = { x: hand.x, y: hand.y };
-        return;
-      }
-
-      const dx = hand.x - previousHand.x;
-      const dy = hand.y - previousHand.y;
-      cameraOffset.copy(camera.position).sub(controls.target);
-      spherical.setFromVector3(cameraOffset);
-      spherical.theta -= dx * 0.006;
-      spherical.phi = THREE.MathUtils.clamp(spherical.phi + dy * 0.006, 0.12, Math.PI - 0.12);
-      cameraOffset.setFromSpherical(spherical);
-      camera.position.copy(controls.target).add(cameraOffset);
-      camera.lookAt(controls.target);
-      previousHand = { x: hand.x, y: hand.y };
-      return;
-    }
-
-    handCursor.classList.remove('pinching');
-    updatePlanetHover(hand.x, hand.y, dt, true);
-  }
-
-  function update(t, dt, hand) {
+  // ---------- per frame ----------
+  function update(t, dt) {
     if (!active) return;
-    handCursor.style.display = hand?.active ? 'block' : 'none';
-    if (hand?.active) {
-      handCursor.style.left = `${hand.x}px`;
-      handCursor.style.top = `${hand.y}px`;
-    } else {
-      hoverLabel.style.display = 'none';
-    }
-    orbitFromHand(hand, dt);
     sun.rotation.y = t * 0.04;
     const orbitMultiplier = Number(orbitSpeed.value);
     const spinMultiplier = Number(spinSpeed.value);
@@ -547,64 +324,19 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
       if (focusZoomDistance !== null) {
         cameraOffset.copy(camera.position).sub(controls.target);
         spherical.setFromVector3(cameraOffset);
-        spherical.radius = THREE.MathUtils.lerp(
-          spherical.radius,
-          focusZoomDistance,
-          1 - Math.exp(-dt * 3),
-        );
+        spherical.radius = THREE.MathUtils.lerp(spherical.radius, focusZoomDistance, 1 - Math.exp(-dt * 3));
         cameraOffset.setFromSpherical(spherical);
         camera.position.copy(controls.target).add(cameraOffset);
-        if (Math.abs(spherical.radius - focusZoomDistance) < 0.1) {
-          focusZoomDistance = null;
-        }
+        if (Math.abs(spherical.radius - focusZoomDistance) < 0.1) focusZoomDistance = null;
       }
-      if (infoPlanet !== selected.name) {
-        showInfo(
-          selected.name,
-          selectedMission ? selectedMission : PLANET_FACTS[selected.name],
-          anchor,
-        );
+      if (infoName !== selected.name) {
+        showInfo(selected.name, selectedMission ? selectedMission : PLANET_FACTS[selected.name], anchor);
       }
-      infoAnchor.getWorldPosition(focusTarget);
-      const projected = stage.project(focusTarget);
-      if (projected.visible) {
-        const { w, h } = stage.size();
-        const radius = stage.screenRadius(focusTarget, selectedPlanet ? selected.radius : 3);
-        const cardWidth = infoCard.offsetWidth;
-        const cardHeight = infoCard.offsetHeight;
-        const vertical = THREE.MathUtils.clamp(projected.y - cardHeight / 2, 12, h - cardHeight - 12);
-        const horizontal = THREE.MathUtils.clamp(projected.x - cardWidth / 2, 12, w - cardWidth - 12);
-        const positions = [
-          [projected.x + radius + 18, vertical],
-          [projected.x - radius - cardWidth - 18, vertical],
-          [horizontal, projected.y + radius + 18],
-          [horizontal, projected.y - radius - cardHeight - 18],
-        ].map(([left, top]) => [
-          THREE.MathUtils.clamp(left, 12, w - cardWidth - 12),
-          THREE.MathUtils.clamp(top, 12, h - cardHeight - 12),
-        ]);
-        const controlsElement = document.getElementById('solar-controls');
-        const controlsRect = controlsElement.getBoundingClientRect();
-        const overlapsControls = ([left, top]) => !document.body.classList.contains('solar-controls-collapsed')
-          && left < controlsRect.right && left + cardWidth > controlsRect.left
-          && top < controlsRect.bottom && top + cardHeight > controlsRect.top;
-        let position = positions.find((candidate) => !overlapsControls(candidate));
-        if (!position && !document.body.classList.contains('solar-controls-collapsed')) {
-          document.body.classList.add('solar-controls-collapsed');
-          document.getElementById('solar-controls-hide').setAttribute('aria-expanded', 'false');
-          document.getElementById('solar-controls-show').setAttribute('aria-expanded', 'false');
-          position = positions[0];
-        }
-        const [left, top] = position ?? positions[0];
-        infoCard.style.left = `${left}px`;
-        infoCard.style.top = `${top}px`;
-      } else {
-        infoCard.hidden = true;
-      }
+      placeInfoCard(selectedPlanet ? selected.radius : PROBE_RADIUS);
     } else if (returningToOverview) {
-      window.speechSynthesis?.cancel();
+      narrator.silence();
       infoCard.hidden = true;
-      infoPlanet = null;
+      infoName = null;
       infoAnchor = null;
       const blend = 1 - Math.exp(-dt * 3);
       controls.target.lerp(overviewTarget, blend);
@@ -613,8 +345,7 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
       spherical.radius = THREE.MathUtils.lerp(spherical.radius, overviewDistance, blend);
       cameraOffset.setFromSpherical(spherical);
       camera.position.copy(controls.target).add(cameraOffset);
-      if (controls.target.distanceTo(overviewTarget) < 0.1
-        && Math.abs(spherical.radius - overviewDistance) < 0.1) {
+      if (controls.target.distanceTo(overviewTarget) < 0.1 && Math.abs(spherical.radius - overviewDistance) < 0.1) {
         controls.target.copy(overviewTarget);
         cameraOffset.setLength(overviewDistance);
         camera.position.copy(controls.target).add(cameraOffset);
@@ -624,6 +355,44 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
     controls.update();
   }
 
+  // Put the fact card beside the selected planet, avoiding the control panel.
+  function placeInfoCard(radiusWorld) {
+    infoAnchor.getWorldPosition(focusTarget);
+    const projected = stage.project(focusTarget);
+    if (!projected.visible) { infoCard.hidden = true; return; }
+    infoCard.hidden = false;
+    const { w, h } = stage.size();
+    const radius = stage.screenRadius(focusTarget, radiusWorld);
+    const cardWidth = infoCard.offsetWidth;
+    const cardHeight = infoCard.offsetHeight;
+    const vertical = THREE.MathUtils.clamp(projected.y - cardHeight / 2, 12, h - cardHeight - 12);
+    const horizontal = THREE.MathUtils.clamp(projected.x - cardWidth / 2, 12, w - cardWidth - 12);
+    const positions = [
+      [projected.x + radius + 18, vertical],
+      [projected.x - radius - cardWidth - 18, vertical],
+      [horizontal, projected.y + radius + 18],
+      [horizontal, projected.y - radius - cardHeight - 18],
+    ].map(([left, top]) => [
+      THREE.MathUtils.clamp(left, 12, w - cardWidth - 12),
+      THREE.MathUtils.clamp(top, 12, h - cardHeight - 12),
+    ]);
+    const collapsed = () => document.body.classList.contains('solar-controls-collapsed');
+    const controlsRect = document.getElementById('solar-controls').getBoundingClientRect();
+    const overlapsControls = ([left, top]) => !collapsed()
+      && left < controlsRect.right && left + cardWidth > controlsRect.left
+      && top < controlsRect.bottom && top + cardHeight > controlsRect.top;
+    let position = positions.find((candidate) => !overlapsControls(candidate));
+    if (!position && !collapsed()) {
+      document.body.classList.add('solar-controls-collapsed');
+      document.getElementById('solar-controls-hide').setAttribute('aria-expanded', 'false');
+      document.getElementById('solar-controls-show').setAttribute('aria-expanded', 'false');
+      position = positions[0];
+    }
+    const [left, top] = position ?? positions[0];
+    infoCard.style.left = `${left}px`;
+    infoCard.style.top = `${top}px`;
+  }
+
   focus.addEventListener('change', () => {
     const selected = orbits.find((planet) => planet.name === focus.value);
     missionSelect.value = 'none';
@@ -631,16 +400,11 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
     focusZoomDistance = selected
       ? THREE.MathUtils.clamp(selected.radius * 2.8, controls.minDistance, controls.maxDistance)
       : null;
-    if (selected) {
-      focusedPlanetHoverArmed = false;
-      suppressDwellPlanet = null;
-      returningToOverview = false;
-    } else if (active) {
-      returningToOverview = true;
-    }
+    if (selected) returningToOverview = false;
+    else if (active) returningToOverview = true;
     focusStatus.textContent = selected
-      ? `Zooming to ${selected.name} · Move off it, then hover over it again to return`
-      : 'Point and hold over a planet or spacecraft for 2 seconds to select';
+      ? `Visiting ${selected.name} · Point at the light at the bottom to go back`
+      : IDLE_STATUS;
   });
 
   missionSelect.addEventListener('change', () => {
@@ -649,27 +413,19 @@ export function createSolarSystem(stage, getVoiceOn = () => false) {
     if (selected) {
       focus.value = 'none';
       focusZoomDistance = 20;
-      focusedPlanetHoverArmed = false;
-      suppressDwellPlanet = null;
       returningToOverview = false;
       showInfo(selected.name, selected, selected.anchor);
-      focusStatus.textContent = `Exploring ${selected.name} · Hover over it again to return`;
+      focusStatus.textContent = `Visiting ${selected.name} · Point at the light at the bottom to go back`;
     } else if (focus.value === 'none' && active) {
       infoCard.hidden = true;
-      window.speechSynthesis?.cancel();
+      narrator.silence();
       returningToOverview = true;
-      focusStatus.textContent = 'Point and hold over a planet or spacecraft for 2 seconds to select';
+      focusStatus.textContent = IDLE_STATUS;
     }
   });
 
-  infoSpeak.disabled = !('speechSynthesis' in window);
-  infoSpeak.addEventListener('click', speakInfo);
-  document.getElementById('solar-planet-info-close').addEventListener('click', () => {
-    focus.value = 'none';
-    missionSelect.value = 'none';
-    selectedMissionName = null;
-    focus.dispatchEvent(new Event('change'));
-  });
+  infoSpeak.addEventListener('click', () => speakInfo(true));
+  document.getElementById('solar-planet-info-close').addEventListener('click', backToOverview);
 
-  return { start, stop, update };
+  return { start, stop, update, targets, get active() { return active; } };
 }

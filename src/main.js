@@ -74,30 +74,32 @@ const ui = {
 };
 
 const journey = createJourney({ stage, card, ui });
-const solarSystem = createSolarSystem(stage, () => settings.voice);
-let solarHandEnabled = false;
-let solarOwnsCamera = false;
+const solarSystem = createSolarSystem(stage, card); // shares the card's soft recorded voice
+let solarOwnsCamera = false; // true if the camera was turned on from the solar-system panel
 if (import.meta.env.DEV) window.herSky = { journey, solarSystem }; // e.g. herSky.journey.jumpTo(5) in the console
+
+const HAND_ON_TEXT = 'Point at a planet or spacecraft and hold to fly to it';
+const HAND_OFF_TEXT = 'Turn on the camera to point with your hand, or use the mouse';
+
+function updateSolarHandButton() {
+  $('solar-hand-btn').textContent = tracker.running ? 'Turn off hand controls' : 'Enable hand controls';
+  $('solar-hand-status').textContent = tracker.running ? HAND_ON_TEXT : HAND_OFF_TEXT;
+  document.body.classList.toggle('solar-hand-active', tracker.running);
+}
 
 function enterSolarSystem() {
   $('start').classList.add('hidden');
   journey.setEnabled(false);
   setSolarControlsCollapsed(false);
   solarSystem.start();
-  solarHandEnabled = tracker.running;
-  $('solar-hand-btn').textContent = solarHandEnabled ? 'Disable hand controls' : 'Enable hand controls';
-  $('solar-hand-status').textContent = solarHandEnabled
-    ? 'Select a planet or spacecraft for facts · Pinch to orbit · Hover over it again to return'
-    : 'Enable camera controls to orbit and focus with your hand';
   document.body.classList.add('solar-active');
-  document.body.classList.toggle('solar-hand-active', solarHandEnabled);
+  updateSolarHandButton();
 }
 
 function returnToJourney() {
   solarSystem.stop();
-  tracker.stop();
+  if (solarOwnsCamera) tracker.stop(); // leave it on if it was started from the main Start button
   solarOwnsCamera = false;
-  solarHandEnabled = false;
   document.body.classList.remove('solar-active');
   document.body.classList.remove('solar-hand-active');
   setSolarControlsCollapsed(false);
@@ -115,37 +117,33 @@ function toggleSolarControls() {
   setSolarControlsCollapsed(!document.body.classList.contains('solar-controls-collapsed'));
 }
 
+// The same hand tracking as the journey; this just turns the camera on or off from the panel.
 async function toggleSolarHandControls() {
   const button = $('solar-hand-btn');
-  const status = $('solar-hand-status');
   button.disabled = true;
   try {
-    if (solarHandEnabled) {
-      solarHandEnabled = false;
-      if (solarOwnsCamera) tracker.stop();
+    if (tracker.running) {
+      tracker.stop();
       solarOwnsCamera = false;
-      status.textContent = 'Hand controls off · Drag to orbit';
     } else {
-      status.textContent = 'Requesting camera access and loading hand tracking…';
+      $('solar-hand-status').textContent = 'Turning on the camera and loading hand tracking…';
       await tracker.load();
-      if (!tracker.running) {
-        const deviceId = $('settings-camera').value || settings.cameraId || $('start-camera').value;
-        await tracker.start(deviceId);
-        solarOwnsCamera = true;
-      }
-      solarHandEnabled = true;
-      status.textContent = 'Select a planet or spacecraft for facts · Pinch to orbit · Hover over it again to return';
+      const deviceId = $('settings-camera').value || settings.cameraId || $('start-camera').value;
+      await tracker.start(deviceId);
+      solarOwnsCamera = true;
     }
+    updateSolarHandButton();
   } catch (err) {
     console.error(err);
-    solarHandEnabled = false;
-    status.textContent = `Could not enable hand controls: ${err.message}. Check camera permission, or use mouse controls.`;
+    updateSolarHandButton();
+    $('solar-hand-status').textContent = `Couldn't turn on the camera: ${err.message}. Check camera permission, or use the mouse.`;
   } finally {
     button.disabled = false;
-    button.textContent = solarHandEnabled ? 'Disable hand controls' : 'Enable hand controls';
-    document.body.classList.toggle('solar-hand-active', solarHandEnabled);
   }
 }
+
+// Whichever mode is open decides what you can point at.
+const activeTargets = () => (solarSystem.active ? solarSystem.targets() : journey.targets());
 
 // ---------- interaction state ----------
 const cursor = { x: 0, y: 0, visible: false };
@@ -255,16 +253,8 @@ function frame(now) {
   tracker.update();
   updateCursor(now, dt);
   journey.update(t, dt, cursor.visible);
-  const hand = solarHandEnabled && tracker.fingertip
-    ? {
-      active: true,
-      x: cursor.x,
-      y: cursor.y,
-      pinch: tracker.pinching,
-    }
-    : { active: false, x: 0, y: 0, pinch: false };
-  solarSystem.update(t, dt, hand);
-  const targets = journey.targets();
+  solarSystem.update(t, dt);
+  const targets = activeTargets();
   const hovered = updateDwell(dt, targets);
 
   const hint = journey.hint();
@@ -333,8 +323,12 @@ window.addEventListener('mousemove', (e) => {
 });
 
 // a click selects right away, no holding needed
+// (but not at the end of a drag, which rotates the solar-system view)
+let downAt = null;
+$('scene').addEventListener('pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY }; });
 $('scene').addEventListener('click', (e) => {
-  const target = overlay.hitTest(journey.targets(), e.clientX, e.clientY);
+  if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) return;
+  const target = overlay.hitTest(activeTargets(), e.clientX, e.clientY);
   if (target) select(target);
 });
 

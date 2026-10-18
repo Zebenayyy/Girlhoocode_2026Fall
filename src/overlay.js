@@ -123,6 +123,16 @@ export function createOverlay(canvas) {
           ctx.stroke();
         }
       } else {
+        if (tg.quiet && !hovered) continue; // e.g. the solar system: rings only on the one you point at
+        if (hovered && tg.label) {
+          ctx.fillStyle = '#fff2d0';
+          ctx.font = `600 ${Math.round(unit * 0.026)}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.shadowColor = 'rgba(0,0,0,0.9)';
+          ctx.shadowBlur = 8;
+          ctx.fillText(tg.label, tg.x, tg.y + tg.r * 1.3 + unit * 0.035);
+          ctx.shadowBlur = 0;
+        }
         // invite: a soft pulsing ring around the object you can point at
         const pulse = 1.15 + 0.06 * Math.sin(t * 2.5);
         ctx.strokeStyle = hovered ? 'rgba(255,220,140,0.95)' : 'rgba(255,255,255,0.35)';

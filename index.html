@@ -148,7 +148,7 @@
         </div>
       </div>
       <button id="solar-hand-btn" class="solar-hand-btn">Enable hand controls</button>
-      <p id="solar-hand-status" class="solar-hand-status">Enable camera controls to orbit and focus with your hand</p>
+      <p id="solar-hand-status" class="solar-hand-status">Turn on the camera to point with your hand, or use the mouse</p>
       <label class="field">
         Focus on planet
         <select id="solar-focus">
@@ -180,11 +180,9 @@
         <span>Rotation speed</span>
         <input id="solar-spin-speed" type="range" min="0" max="3" step="0.05" value="1">
       </label>
-      <p id="solar-focus-status" class="solar-focus-status">Point and hold over a planet or spacecraft for 2 seconds to select</p>
+      <p id="solar-focus-status" class="solar-focus-status">Point at a planet or spacecraft and hold to fly to it</p>
     </section>
     <button id="solar-controls-show" class="solar-controls-show" type="button" aria-expanded="false" aria-controls="solar-controls">Show controls (H)</button>
-    <div id="solar-cursor" class="solar-cursor" aria-hidden="true"></div>
-    <div id="solar-hover-label" class="solar-hover-label" aria-live="polite"></div>
     <aside id="solar-planet-info" class="solar-planet-info" aria-labelledby="solar-planet-info-title" hidden>
       <button id="solar-planet-info-close" class="solar-planet-info-close" type="button" aria-label="Close planet facts">×</button>
       <h2 id="solar-planet-info-title"></h2>
