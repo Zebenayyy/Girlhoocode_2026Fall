@@ -5,6 +5,7 @@ import { createCard } from './card.js';
 import { STOPS } from './stops.js';
 import { createHandTracker, createPointer, listCameras, unlockCameraLabels } from './hands.js';
 import { DEFAULTS, SLIDERS, loadSettings, saveSettings } from './settings.js';
+import { createSolarSystem } from './solar-system.js';
 
 const HAND_LOST_MS = 400; // hide the cursor this long after the hand disappears
 const MOUSE_ACTIVE_MS = 3000; // mouse cursor shows this long after the last move
@@ -48,7 +49,78 @@ const ui = {
 };
 
 const journey = createJourney({ stage, card, ui });
+const solarSystem = createSolarSystem(stage, () => settings.voice);
+let solarHandEnabled = false;
+let solarOwnsCamera = false;
 if (import.meta.env.DEV) window.herSky = { journey }; // e.g. herSky.journey.jumpTo(5) in the console
+
+function enterSolarSystem() {
+  $('start').classList.add('hidden');
+  journey.setEnabled(false);
+  setSolarControlsCollapsed(false);
+  solarSystem.start();
+  solarHandEnabled = tracker.running;
+  $('solar-hand-btn').textContent = solarHandEnabled ? 'Disable hand controls' : 'Enable hand controls';
+  $('solar-hand-status').textContent = solarHandEnabled
+    ? 'Select a planet or spacecraft for facts · Pinch to orbit · Hover over it again to return'
+    : 'Enable camera controls to orbit and focus with your hand';
+  document.body.classList.add('solar-active');
+  document.body.classList.toggle('solar-hand-active', solarHandEnabled);
+}
+
+function returnToJourney() {
+  solarSystem.stop();
+  tracker.stop();
+  solarOwnsCamera = false;
+  solarHandEnabled = false;
+  document.body.classList.remove('solar-active');
+  document.body.classList.remove('solar-hand-active');
+  setSolarControlsCollapsed(false);
+  journey.setEnabled(true);
+  $('start').classList.remove('hidden');
+}
+
+function setSolarControlsCollapsed(collapsed) {
+  document.body.classList.toggle('solar-controls-collapsed', collapsed);
+  $('solar-controls-hide').setAttribute('aria-expanded', String(!collapsed));
+  $('solar-controls-show').setAttribute('aria-expanded', String(!collapsed));
+}
+
+function toggleSolarControls() {
+  setSolarControlsCollapsed(!document.body.classList.contains('solar-controls-collapsed'));
+}
+
+async function toggleSolarHandControls() {
+  const button = $('solar-hand-btn');
+  const status = $('solar-hand-status');
+  button.disabled = true;
+  try {
+    if (solarHandEnabled) {
+      solarHandEnabled = false;
+      if (solarOwnsCamera) tracker.stop();
+      solarOwnsCamera = false;
+      status.textContent = 'Hand controls off · Drag to orbit';
+    } else {
+      status.textContent = 'Requesting camera access and loading hand tracking…';
+      await tracker.load();
+      if (!tracker.running) {
+        const deviceId = $('settings-camera').value || settings.cameraId || $('start-camera').value;
+        await tracker.start(deviceId);
+        solarOwnsCamera = true;
+      }
+      solarHandEnabled = true;
+      status.textContent = 'Select a planet or spacecraft for facts · Pinch to orbit · Hover over it again to return';
+    }
+  } catch (err) {
+    console.error(err);
+    solarHandEnabled = false;
+    status.textContent = `Could not enable hand controls: ${err.message}. Check camera permission, or use mouse controls.`;
+  } finally {
+    button.disabled = false;
+    button.textContent = solarHandEnabled ? 'Disable hand controls' : 'Enable hand controls';
+    document.body.classList.toggle('solar-hand-active', solarHandEnabled);
+  }
+}
 
 // ---------- interaction state ----------
 const cursor = { x: 0, y: 0, visible: false };
@@ -113,6 +185,15 @@ function frame(now) {
   tracker.update();
   updateCursor(now, dt);
   journey.update(t, dt, cursor.visible);
+  const hand = solarHandEnabled && tracker.fingertip
+    ? {
+      active: true,
+      x: cursor.x,
+      y: cursor.y,
+      pinch: tracker.pinching,
+    }
+    : { active: false, x: 0, y: 0, pinch: false };
+  solarSystem.update(t, dt, hand);
   const targets = journey.targets();
   const hovered = updateDwell(dt, targets);
 
@@ -188,6 +269,10 @@ window.addEventListener('keydown', (e) => {
   else if (key === 'v') setVoice(!settings.voice);
   else if (key === 'm') setMirror(!settings.mirror);
   else if (key === 'r') journey.reset();
+  else if (key === 'p') {
+    if (document.body.classList.contains('solar-active')) returnToJourney();
+    else enterSolarSystem();
+  } else if (key === 'h' && document.body.classList.contains('solar-active')) toggleSolarControls();
 });
 
 function toggleFullscreen() {
@@ -271,6 +356,11 @@ $('start-btn').addEventListener('click', async () => {
 });
 
 $('mouse-btn').addEventListener('click', () => $('start').classList.add('hidden'));
+$('solar-btn').addEventListener('click', enterSolarSystem);
+$('journey-btn').addEventListener('click', returnToJourney);
+$('solar-controls-hide').addEventListener('click', () => setSolarControlsCollapsed(true));
+$('solar-controls-show').addEventListener('click', () => setSolarControlsCollapsed(false));
+$('solar-hand-btn').addEventListener('click', toggleSolarHandControls);
 
 // ---------- settings panel ----------
 function setMirror(on) {

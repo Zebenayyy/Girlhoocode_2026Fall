@@ -3,6 +3,7 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
 const BASE = import.meta.env.BASE_URL;
 const INDEX_TIP = 8;
+const DETECTION_INTERVAL_MS = 1000 / 30;
 
 export async function listCameras() {
   const devices = await navigator.mediaDevices.enumerateDevices();
@@ -19,13 +20,15 @@ export function createHandTracker(video) {
   let landmarker = null;
   let stream = null;
   let lastVideoTime = -1;
+  let lastDetectionAt = -Infinity;
   let latest = null; // { x, y } index fingertip in raw camera coords (0..1), or null
   let landmarks = null; // all 21 points of the tracked hand, for the preview
 
   async function load() {
+    if (landmarker) return;
     const fileset = await FilesetResolver.forVisionTasks(`${BASE}mediapipe/wasm`);
     landmarker = await HandLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: `${BASE}models/hand_landmarker.task`, delegate: 'GPU' },
+      baseOptions: { modelAssetPath: `${BASE}models/hand_landmarker.task`, delegate: 'CPU' },
       runningMode: 'VIDEO',
       numHands: 1,
     });
@@ -36,8 +39,9 @@ export function createHandTracker(video) {
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 30, max: 30 },
       },
     });
     video.srcObject = stream;
@@ -47,14 +51,33 @@ export function createHandTracker(video) {
   function stop() {
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
+    latest = null;
+    landmarks = null;
+    lastVideoTime = -1;
+    lastDetectionAt = -Infinity;
+  }
+
+  function getPinchDistance() {
+    if (!landmarks) return Infinity;
+    const thumb = landmarks[4];
+    const index = landmarks[8];
+    const wrist = landmarks[0];
+    const middleBase = landmarks[9];
+    const palmLength = Math.hypot(wrist.x - middleBase.x, wrist.y - middleBase.y);
+    return palmLength > 0
+      ? Math.hypot(thumb.x - index.x, thumb.y - index.y) / palmLength
+      : Infinity;
   }
 
   // Call every frame. Only runs detection when the camera has a new frame.
   function update() {
     if (!landmarker || !stream || video.readyState < 2) return;
+    const now = performance.now();
+    if (now - lastDetectionAt < DETECTION_INTERVAL_MS) return;
     if (video.currentTime === lastVideoTime) return;
     lastVideoTime = video.currentTime;
-    const result = landmarker.detectForVideo(video, performance.now());
+    lastDetectionAt = now;
+    const result = landmarker.detectForVideo(video, now);
     landmarks = result.landmarks?.[0] ?? null;
     latest = landmarks ? { x: landmarks[INDEX_TIP].x, y: landmarks[INDEX_TIP].y } : null;
   }
@@ -66,6 +89,7 @@ export function createHandTracker(video) {
     update,
     get fingertip() { return latest; },
     get landmarks() { return landmarks; },
+    get pinching() { return getPinchDistance() < 0.35; },
     get running() { return !!stream; },
   };
 }

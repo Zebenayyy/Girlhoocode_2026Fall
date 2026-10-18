@@ -29,25 +29,27 @@ export function createJourney({ stage, card, ui }) {
   const { scene, camera } = stage;
 
   // ---------- build the world ----------
-  scene.add(new THREE.AmbientLight(0xffffff, 0.06));
+  const journeyGroup = new THREE.Group();
+  scene.add(journeyGroup);
+  journeyGroup.add(new THREE.AmbientLight(0xffffff, 0.06));
   const sunLight = new THREE.PointLight(0xfff2dd, 3.2, 0, 0);
   sunLight.position.copy(v3(SUN_POS));
-  scene.add(sunLight);
+  journeyGroup.add(sunLight);
 
   const bodies = STOPS.map((s) => {
     const body = BUILDERS[s.kind](s, { sunPos: SUN_POS });
     body.group.position.copy(v3(s.pos));
-    scene.add(body.group);
+    journeyGroup.add(body.group);
     return body;
   });
-  const warp = createWarp(scene);
+  const warp = createWarp(journeyGroup);
 
   // finale constellation: hidden until the end
   const finaleCenter = v3(FINALE_POS);
   const constellation = new THREE.Group();
   constellation.position.copy(finaleCenter);
   constellation.visible = false;
-  scene.add(constellation);
+  journeyGroup.add(constellation);
   const conStars = CROWN.map(([x, y], i) => {
     const g = new THREE.Group();
     g.position.set(x * 520, y * 330, 0);
@@ -119,6 +121,7 @@ export function createJourney({ stage, card, ui }) {
   let orbit = 0;
   let finaleT = 0;
   let lastActivity = performance.now();
+  let enabled = true;
 
   function goTitle() {
     state = 'title';
@@ -193,6 +196,7 @@ export function createJourney({ stage, card, ui }) {
   }
 
   function targets() {
+    if (!enabled) return [];
     if (flight) return [];
     if (state === 'title') return [objectTarget(0, startJourney)].filter(Boolean);
     if (state === 'arrived') return [objectTarget(index, () => beginStory(index))].filter(Boolean);
@@ -205,6 +209,7 @@ export function createJourney({ stage, card, ui }) {
   }
 
   function hint() {
+    if (!enabled) return '';
     if (flight) return '';
     if (state === 'title') return 'Point at Earth and hold to begin your journey';
     if (state === 'arrived') return `Point at ${STOPS[index].name} and hold to hear her story`;
@@ -214,6 +219,7 @@ export function createJourney({ stage, card, ui }) {
 
   // ---------- per frame ----------
   function update(t, dt, cursorActive) {
+    if (!enabled) return;
     const now = performance.now();
     if (cursorActive) lastActivity = now;
     if (state !== 'title' && !flight && now - lastActivity > IDLE_RESET_MS) flyHome();
@@ -275,5 +281,18 @@ export function createJourney({ stage, card, ui }) {
   goTitle();
   camera.position.set(0, 10, 60);
 
-  return { update, targets, hint, jumpTo, get state() { return state; }, get index() { return index; }, reset: goTitle };
+  function setEnabled(on) {
+    enabled = on;
+    journeyGroup.visible = on;
+    if (on) goTitle();
+    else {
+      card.hide();
+      ui.setTitle(false);
+      ui.setFinale(false);
+      ui.setChapter(null);
+      ui.setProgress(-1);
+    }
+  }
+
+  return { update, targets, hint, jumpTo, setEnabled, get state() { return state; }, get index() { return index; }, reset: goTitle };
 }

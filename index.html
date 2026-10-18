@@ -47,14 +47,73 @@
       <div class="row">
         <button id="start-btn" class="primary">Start</button>
         <button id="mouse-btn">Mouse only</button>
+        <button id="solar-btn">Solar system</button>
       </div>
       <p id="start-status" class="status"></p>
-      <p class="keys">S settings · C camera view · F fullscreen · V voice on/off · M flip left/right · R restart</p>
+      <p class="keys">S settings · C camera view · F fullscreen · V voice on/off · M flip left/right · R restart · P solar system</p>
       <p class="keys credits">
         Images: NASA (Blue Marble, LRO, New Horizons), NASA/Goddard SVS Deep Star Maps (with ESA/Gaia/DPAC),<br />
-        Horsehead Nebula: NASA, ESA, and the Hubble Heritage Team (STScI/AURA)
+        Horsehead Nebula: NASA, ESA, and the Hubble Heritage Team (STScI/AURA). Solar-system textures:
+        <a href="https://github.com/cdmain/3d-solar-system" target="_blank" rel="noreferrer">cdmain/3d-solar-system</a>
       </p>
     </div>
+
+    <section id="solar-controls" class="solar-controls" aria-label="Solar system controls">
+      <div class="solar-controls-head">
+        <div>
+          <h2>Solar System</h2>
+          <p>Explore the planets · Press H to hide these controls</p>
+        </div>
+        <div class="solar-controls-actions">
+          <button id="solar-controls-hide" type="button" aria-expanded="true" aria-controls="solar-controls">Hide controls</button>
+          <button id="journey-btn" type="button">Main menu</button>
+        </div>
+      </div>
+      <button id="solar-hand-btn" class="solar-hand-btn">Enable hand controls</button>
+      <p id="solar-hand-status" class="solar-hand-status">Enable camera controls to orbit and focus with your hand</p>
+      <label class="field">
+        Focus on planet
+        <select id="solar-focus">
+          <option value="none">Free view</option>
+          <option>Mercury</option>
+          <option>Venus</option>
+          <option>Earth</option>
+          <option>Mars</option>
+          <option>Jupiter</option>
+          <option>Saturn</option>
+          <option>Uranus</option>
+          <option>Neptune</option>
+        </select>
+      </label>
+      <label class="field">
+        Spacecraft missions
+        <select id="solar-mission">
+          <option value="none">Select a mission</option>
+          <option value="Perseverance">Perseverance · Mars</option>
+          <option value="Cassini">Cassini · Saturn</option>
+          <option value="Voyager 1">Voyager 1 · Interstellar space</option>
+        </select>
+      </label>
+      <label class="solar-slider">
+        <span>Orbit speed</span>
+        <input id="solar-orbit-speed" type="range" min="0" max="3" step="0.05" value="1">
+      </label>
+      <label class="solar-slider">
+        <span>Rotation speed</span>
+        <input id="solar-spin-speed" type="range" min="0" max="3" step="0.05" value="1">
+      </label>
+      <p id="solar-focus-status" class="solar-focus-status">Point and hold over a planet or spacecraft for 2 seconds to select</p>
+    </section>
+    <button id="solar-controls-show" class="solar-controls-show" type="button" aria-expanded="false" aria-controls="solar-controls">Show controls (H)</button>
+    <div id="solar-cursor" class="solar-cursor" aria-hidden="true"></div>
+    <div id="solar-hover-label" class="solar-hover-label" aria-live="polite"></div>
+    <aside id="solar-planet-info" class="solar-planet-info" aria-labelledby="solar-planet-info-title" hidden>
+      <button id="solar-planet-info-close" class="solar-planet-info-close" type="button" aria-label="Close planet facts">×</button>
+      <h2 id="solar-planet-info-title"></h2>
+      <ul id="solar-planet-info-facts"></ul>
+      <button id="solar-planet-info-speak" class="solar-planet-info-speak" type="button">Read aloud</button>
+      <a id="solar-planet-info-source" href="#" target="_blank" rel="noreferrer">Source: NASA</a>
+    </aside>
 
     <div id="settings" class="panel">
       <h2>Settings</h2>
@@ -63,7 +122,7 @@
         <select id="settings-camera"></select>
       </label>
       <label class="check"><input type="checkbox" id="mirror" /> Flip left/right (M) if the cursor goes the wrong way</label>
-      <label class="check"><input type="checkbox" id="voice" /> Read stories aloud</label>
+      <label class="check"><input type="checkbox" id="voice" /> Read stories and space facts aloud</label>
       <div id="sliders"></div>
       <button id="reset-btn">Reset to defaults</button>
       <p class="keys">The yellow box in the camera view (C) is the reach area.<br />Press S to close.</p>
