@@ -1,7 +1,7 @@
 import { createStage } from './stage.js';
 import { createOverlay } from './overlay.js';
 import { createJourney } from './journey.js';
-import { createCard } from './card.js';
+import { createCard, listVoices } from './card.js';
 import { STOPS } from './stops.js';
 import { createHandTracker, createPointer, listCameras, unlockCameraLabels } from './hands.js';
 import { DEFAULTS, SLIDERS, loadSettings, saveSettings } from './settings.js';
@@ -14,7 +14,7 @@ const $ = (id) => document.getElementById(id);
 const settings = loadSettings();
 const stage = createStage($('scene'));
 const overlay = createOverlay($('overlay'));
-const card = createCard($('card'), () => settings.voice);
+const card = createCard($('card'), settings);
 const tracker = createHandTracker($('video'));
 const pointer = createPointer();
 
@@ -22,8 +22,14 @@ const pointer = createPointer();
 STOPS.forEach(() => $('progress').appendChild(document.createElement('span')));
 
 let travelTimer = null;
+let recycledTimer = null;
+let tutorialShownAt = 0;
 const ui = {
   setTitle(on) { $('title-banner').classList.toggle('visible', on); },
+  setTutorial(on) {
+    if (on && !$('tutorial').classList.contains('visible')) tutorialShownAt = performance.now();
+    $('tutorial').classList.toggle('visible', on);
+  },
   setFinale(on) { $('finale').classList.toggle('visible', on); },
   setProgress(i) {
     [...$('progress').children].forEach((el, k) => el.classList.toggle('lit', k <= i));
@@ -44,6 +50,24 @@ const ui = {
     $('travel').classList.add('visible');
     clearTimeout(travelTimer);
     travelTimer = setTimeout(() => $('travel').classList.remove('visible'), 2600);
+  },
+  setFuel(f) {
+    $('fuel-fill').style.width = `${Math.round(f * 100)}%`;
+    $('fuel-text').textContent = f >= 0.999 ? 'Full, ready to fly' : f <= 0.001 ? 'Empty: collect space junk' : `${Math.round(f * 100)}%`;
+    document.querySelector('.dash-fuel').classList.toggle('low', f <= 0.001);
+  },
+  setCollected(n, total) { $('junk-count').textContent = `${n} / ${total}`; },
+  recycled(name, fact) {
+    $('recycled').querySelector('.recycled-name').textContent = `♻ Recycled ${name} into fuel`;
+    $('recycled').querySelector('.recycled-fact').textContent = fact ?? '';
+    $('recycled').classList.add('visible');
+    clearTimeout(recycledTimer);
+    recycledTimer = setTimeout(() => $('recycled').classList.remove('visible'), fact ? 6500 : 2500);
+  },
+  setHome(on, n = 0) {
+    $('home-text').textContent = `You recycled ${n} pieces of space junk on your journey, and Earth's orbit is clean because of you.`;
+    $('home').classList.toggle('visible', on);
+    if (!on) $('recycled').classList.remove('visible');
   },
 };
 
@@ -96,10 +120,55 @@ function updateDwell(dt, targets) {
     dwellId = hovered.id;
     progress = 0;
   } else {
-    progress += dt / settings.holdTime;
+    // junk is quick to grab; stories and travel take a deliberate hold
+    progress += dt / (settings.holdTime * (hovered.kind === 'junk' ? 0.5 : 1));
     if (progress >= 1) select(hovered);
   }
   return hovered;
+}
+
+// ---------- tutorial arrows: from each label to the thing it explains ----------
+const TIP_DELAYS = [0.2, 0.9, 1.6, 2.3, 3.0]; // seconds; matches the CSS transition delays
+
+function closestOnRect(r, p) {
+  return { x: Math.min(Math.max(p.x, r.left), r.right), y: Math.min(Math.max(p.y, r.top), r.bottom) };
+}
+
+function topCenter(el) {
+  const r = el.getBoundingClientRect();
+  return { x: (r.left + r.right) / 2, y: r.top - 4 };
+}
+
+function tutorialArrows(targets) {
+  if (!$('tutorial').classList.contains('visible')) return [];
+  const since = (performance.now() - tutorialShownAt) / 1000;
+  const arrows = [];
+  [...document.querySelectorAll('#tutorial .tip')].forEach((tip, i) => {
+    const rect = tip.getBoundingClientRect();
+    const mid = { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
+    let to = null;
+    const kind = tip.dataset.target;
+    if (kind === 'earth' || kind === 'beacon') {
+      // point at the edge of the circle, on the side facing the label
+      let c, r;
+      if (kind === 'earth') {
+        c = stage.project({ x: 0, y: 0, z: 0 });
+        r = stage.screenRadius({ x: 0, y: 0, z: 0 }, STOPS[0].radius) * 0.95;
+      } else {
+        const b = targets.find((tg) => tg.kind === 'beacon');
+        if (!b) return;
+        c = b;
+        r = b.r * 1.15;
+      }
+      const d = Math.hypot(mid.x - c.x, mid.y - c.y) || 1;
+      to = { x: c.x + ((mid.x - c.x) / d) * r, y: c.y + ((mid.y - c.y) / d) * r };
+    } else {
+      to = topCenter(document.querySelector(`.dash-${kind === 'guide' ? 'center' : kind}`));
+    }
+    const alpha = Math.min(1, Math.max(0, (since - TIP_DELAYS[i] - 0.3) / 0.5));
+    arrows.push({ from: closestOnRect(rect, to), to, alpha });
+  });
+  return arrows;
 }
 
 // ---------- main loop ----------
@@ -120,7 +189,10 @@ function frame(now) {
   if (hint !== lastHint) { $('hint').textContent = hint; lastHint = hint; }
 
   stage.render();
-  overlay.draw({ t, targets, hoveredId: hovered?.id ?? null, progress, cursor });
+  overlay.draw({
+    t, targets, hoveredId: hovered?.id ?? null, progress, cursor,
+    beams: journey.beams(), arrows: tutorialArrows(targets),
+  });
   if ($('preview').classList.contains('visible')) drawPreview();
 
   requestAnimationFrame(frame);
@@ -158,12 +230,18 @@ function drawPreview() {
       pctx.arc(x, p.y * ph, i === 8 ? 5 : 2.5, 0, Math.PI * 2);
       pctx.fill();
     });
-  } else if (!tracker.running) {
-    pctx.fillStyle = '#fff';
-    pctx.font = '14px system-ui';
-    pctx.fillText('No camera running', 10, 22);
   }
+  // live status line, refreshed twice a second
+  const now = performance.now();
+  if (now - statusAt > 500) { statusText = tracker.status(); statusAt = now; }
+  pctx.fillStyle = 'rgba(0,0,0,0.6)';
+  pctx.fillRect(0, 0, pw, 24);
+  pctx.fillStyle = lm ? '#8cffc8' : '#ffb27a';
+  pctx.font = '13px system-ui';
+  pctx.fillText(statusText, 8, 17);
 }
+let statusText = '';
+let statusAt = 0;
 
 // ---------- mouse fallback ----------
 window.addEventListener('mousemove', (e) => {
@@ -218,7 +296,7 @@ async function fillCameraSelects() {
   // prefer the saved camera, then anything that looks like the iPhone
   const preferred =
     cams.find((c) => c.deviceId === settings.cameraId) ||
-    cams.find((c) => /ivcam|iphone|camo/i.test(c.label)) ||
+    cams.find((c) => /ivcam|iphone|camo|droidcam|iriun/i.test(c.label)) ||
     cams[0];
   for (const sel of [$('start-camera'), $('settings-camera')]) {
     sel.innerHTML = '';
@@ -236,6 +314,7 @@ async function switchCamera(deviceId) {
   settings.cameraId = deviceId;
   saveSettings(settings);
   try {
+    await tracker.load(); // in case the session began with "Mouse only"
     await tracker.start(deviceId);
     toast('Camera switched');
   } catch (err) {
@@ -316,6 +395,28 @@ $('reset-btn').addEventListener('click', () => {
   buildSettingsPanel();
   toast('Settings reset');
 });
+
+// ---------- voice picker ----------
+function fillVoiceSelect() {
+  const sel = $('voice-select');
+  const voices = listVoices();
+  sel.innerHTML = '<option value="">Automatic (most natural)</option>';
+  for (const v of voices) {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = v.name.replace(/^Microsoft /, '').replace(/ - English.*$/, '');
+    sel.appendChild(opt);
+  }
+  sel.value = voices.some((v) => v.name === settings.voiceName) ? settings.voiceName : '';
+}
+$('voice-select').addEventListener('change', (e) => {
+  settings.voiceName = e.target.value;
+  saveSettings(settings);
+  card.test();
+});
+$('voice-test').addEventListener('click', () => card.test());
+if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', fillVoiceSelect);
+fillVoiceSelect();
 
 buildSettingsPanel();
 fillCameraSelects();

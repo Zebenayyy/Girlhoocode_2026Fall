@@ -9,11 +9,90 @@
   </head>
   <body>
     <canvas id="scene"></canvas>
+
+    <!-- the ship's window frame; the 3D view is the window -->
+    <svg id="cockpit" class="cockpit" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="hull" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1b2236" />
+          <stop offset="1" stop-color="#090c16" />
+        </linearGradient>
+      </defs>
+      <path fill="url(#hull)" fill-rule="evenodd"
+        d="M0,0 H1600 V900 H0 Z M78,30 H1522 L1574,82 V690 L1496,762 H104 L26,690 V82 Z" />
+      <path fill="none" stroke="#4d5f95" stroke-width="3"
+        d="M78,30 H1522 L1574,82 V690 L1496,762 H104 L26,690 V82 Z" />
+      <path fill="none" stroke="rgba(130,180,255,0.18)" stroke-width="10"
+        d="M78,30 H1522 L1574,82 V690 L1496,762 H104 L26,690 V82 Z" />
+      <g fill="#2e3a5e">
+        <circle cx="200" cy="15" r="3" /><circle cx="500" cy="15" r="3" /><circle cx="800" cy="15" r="3" />
+        <circle cx="1100" cy="15" r="3" /><circle cx="1400" cy="15" r="3" />
+        <circle cx="13" cy="300" r="3" /><circle cx="13" cy="500" r="3" />
+        <circle cx="1587" cy="300" r="3" /><circle cx="1587" cy="500" r="3" />
+      </g>
+    </svg>
+
+    <div id="dash" class="dash">
+      <div class="dash-panel dash-fuel">
+        <div class="dash-label">FUEL</div>
+        <div class="fuel-bar"><div id="fuel-fill" class="fuel-fill"></div></div>
+        <div id="fuel-text" class="dash-value">Empty</div>
+      </div>
+      <div class="dash-panel dash-center">
+        <div id="hint" class="hint"></div>
+        <div id="progress" class="progress"></div>
+      </div>
+      <div class="dash-panel dash-junk">
+        <div class="dash-label">♻ JUNK RECYCLED</div>
+        <div id="junk-count" class="dash-value big">0 / 33</div>
+      </div>
+    </div>
+
     <canvas id="overlay"></canvas>
 
     <div id="title-banner" class="title-banner">
       <h1>HER SKY</h1>
       <p>A journey to the edge of the universe, guided by the women who discovered it</p>
+      <p class="mission">Your ship runs on recycled space junk. Clean up space as you explore!</p>
+    </div>
+
+    <!-- how-to-play: labels around the screen; arrows to what they describe are drawn on the overlay -->
+    <div id="tutorial" class="tutorial">
+      <div class="tut-head">
+        <h2>How to fly your ship</h2>
+        <p>Follow the arrows to learn the controls</p>
+      </div>
+      <div class="tip" id="tip-planet" data-target="earth">
+        <b>Planets, stars and galaxies</b>
+        <span>Point at one and hold to hear the woman who discovered its secrets.</span>
+      </div>
+      <div class="tip" id="tip-guide" data-target="guide">
+        <b>Your guide</b>
+        <span>This panel tells you what to do next. A star lights up for each woman you meet.</span>
+      </div>
+      <div class="tip" id="tip-fuel" data-target="fuel">
+        <b>Fuel</b>
+        <span>Grab the space junk floating by to fill your tank. Every trip uses a full tank.</span>
+      </div>
+      <div class="tip" id="tip-junk" data-target="junk">
+        <b>Junk recycled</b>
+        <span>Every piece you collect is counted here. Clear all 33 to clean up Earth's orbit.</span>
+      </div>
+      <div class="tip tip-ready" id="tip-ready" data-target="beacon">
+        <b>Try it now</b>
+        <span>Point at the light and hold still until the ring fills.</span>
+      </div>
+    </div>
+
+    <div id="home" class="finale home">
+      <h2>Welcome home, pilot!</h2>
+      <p id="home-text"></p>
+      <p class="small">Real space agencies are working on ways to clean up space junk. Maybe you'll invent the next one.</p>
+    </div>
+
+    <div id="recycled" class="recycled">
+      <div class="recycled-name"></div>
+      <div class="recycled-fact"></div>
     </div>
 
     <div id="chapter" class="chapter">
@@ -33,8 +112,6 @@
     </div>
 
     <div id="card" class="card"></div>
-    <div id="hint" class="hint"></div>
-    <div id="progress" class="progress"></div>
     <div id="toast" class="toast"></div>
 
     <div id="start" class="start">
@@ -64,13 +141,20 @@
       </label>
       <label class="check"><input type="checkbox" id="mirror" /> Flip left/right (M) if the cursor goes the wrong way</label>
       <label class="check"><input type="checkbox" id="voice" /> Read stories aloud</label>
+      <label class="field">
+        Voice
+        <div class="row">
+          <select id="voice-select"></select>
+          <button id="voice-test">Test</button>
+        </div>
+      </label>
       <div id="sliders"></div>
       <button id="reset-btn">Reset to defaults</button>
       <p class="keys">The yellow box in the camera view (C) is the reach area.<br />Press S to close.</p>
     </div>
 
     <div id="preview" class="preview">
-      <canvas id="preview-canvas" width="320" height="180"></canvas>
+      <canvas id="preview-canvas" width="480" height="270"></canvas>
     </div>
     <video id="video" playsinline muted></video>
 

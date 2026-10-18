@@ -44,14 +44,84 @@ export function createOverlay(canvas) {
     ctx.fillText(b.label, b.x, b.y + b.r * 1.25 + unit * 0.03);
   }
 
-  // state: { t, targets, hoveredId, progress (0..1), cursor: { x, y, visible } }
-  function draw({ t, targets, hoveredId, progress, cursor }) {
+  // tractor beam from the ship's nose (bottom center) to a piece of junk being pulled in
+  function drawBeam(p, t) {
+    const x0 = w * 0.5, y0 = h * 0.86;
+    const g = ctx.createLinearGradient(x0, y0, p.x, p.y);
+    g.addColorStop(0, 'rgba(120,255,200,0.7)');
+    g.addColorStop(1, 'rgba(120,255,200,0.15)');
+    ctx.strokeStyle = g;
+    ctx.lineCap = 'round';
+    for (const [width, alpha] of [[unit * 0.03, 0.25], [unit * 0.008, 0.9]]) {
+      ctx.globalAlpha = alpha * (0.8 + 0.2 * Math.sin(t * 30));
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // tutorial arrow: a gently curved, animated dashed line with an arrowhead at `to`
+  function drawArrow({ from, to, alpha }, t) {
+    if (alpha <= 0) return;
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 10) return;
+    // bend the curve sideways a little
+    const cx = (from.x + to.x) / 2 - dy * 0.18;
+    const cy = (from.y + to.y) / 2 + dx * 0.18;
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#ffd36b';
+    ctx.lineWidth = Math.max(2, unit * 0.004);
+    ctx.setLineDash([unit * 0.014, unit * 0.01]);
+    ctx.lineDashOffset = -t * unit * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(cx, cy, to.x, to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // arrowhead along the curve's final direction
+    const a = Math.atan2(to.y - cy, to.x - cx);
+    const s = unit * 0.022;
+    ctx.fillStyle = '#ffd36b';
+    ctx.beginPath();
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - Math.cos(a - 0.45) * s, to.y - Math.sin(a - 0.45) * s);
+    ctx.lineTo(to.x - Math.cos(a + 0.45) * s, to.y - Math.sin(a + 0.45) * s);
+    ctx.closePath();
+    ctx.fill();
+    // a small pulsing dot where the arrow points
+    ctx.globalAlpha = alpha * (0.5 + 0.5 * Math.sin(t * 4));
+    ctx.beginPath();
+    ctx.arc(to.x, to.y, unit * 0.008, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // state: { t, targets, hoveredId, progress (0..1), cursor: { x, y, visible }, beams: [{ x, y }], arrows }
+  function draw({ t, targets, hoveredId, progress, cursor, beams = [], arrows = [] }) {
     ctx.clearRect(0, 0, w, h);
+
+    arrows.forEach((a) => drawArrow(a, t));
+    beams.forEach((b) => drawBeam(b, t));
 
     for (const tg of targets) {
       const hovered = tg.id === hoveredId;
       if (tg.kind === 'beacon') {
         drawBeacon(tg, t, hovered);
+      } else if (tg.kind === 'junk') {
+        // collectible: a green targeting bracket
+        const r = tg.r * (1.05 + 0.05 * Math.sin(t * 4));
+        ctx.strokeStyle = hovered ? 'rgba(140,255,200,1)' : 'rgba(140,255,200,0.6)';
+        ctx.lineWidth = hovered ? 3 : 2;
+        for (let k = 0; k < 4; k++) {
+          const a = k * (Math.PI / 2) + Math.PI / 4 + t * 0.6;
+          ctx.beginPath();
+          ctx.arc(tg.x, tg.y, r, a - 0.35, a + 0.35);
+          ctx.stroke();
+        }
       } else {
         // invite: a soft pulsing ring around the object you can point at
         const pulse = 1.15 + 0.06 * Math.sin(t * 2.5);
@@ -82,17 +152,16 @@ export function createOverlay(canvas) {
     }
   }
 
-  // The target under a screen point, if any. Beacons get priority.
+  // The target under a screen point, if any. Beacons win, then junk, then objects (closest first).
+  const PRIORITY = { beacon: 0, junk: 1, object: 2 };
   function hitTest(targets, x, y) {
-    let best = null, bestD = Infinity;
+    let best = null, bestKey = Infinity;
     for (const tg of targets) {
       const d = Math.hypot(x - tg.x, y - tg.y);
-      const reach = tg.r * (tg.kind === 'beacon' ? 1.4 : 1.2);
-      if (d < reach && (tg.kind === 'beacon' || d < bestD)) {
-        if (tg.kind === 'beacon') return tg;
-        best = tg;
-        bestD = d;
-      }
+      const reach = tg.r * (tg.kind === 'object' ? 1.2 : 1.4);
+      if (d >= reach) continue;
+      const key = PRIORITY[tg.kind] * 1e6 + d;
+      if (key < bestKey) { best = tg; bestKey = key; }
     }
     return best;
   }

@@ -21,14 +21,30 @@ export function createHandTracker(video) {
   let lastVideoTime = -1;
   let latest = null; // { x, y } index fingertip in raw camera coords (0..1), or null
   let landmarks = null; // all 21 points of the tracked hand, for the preview
+  let delegateUsed = '';
+  let detections = 0; // frames analyzed, for the debug readout
+  let detectStart = performance.now();
 
   async function load() {
+    if (landmarker) return;
     const fileset = await FilesetResolver.forVisionTasks(`${BASE}mediapipe/wasm`);
-    landmarker = await HandLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: `${BASE}models/hand_landmarker.task`, delegate: 'GPU' },
+    const options = (delegate) => ({
+      baseOptions: { modelAssetPath: `${BASE}models/hand_landmarker.task`, delegate },
       runningMode: 'VIDEO',
       numHands: 1,
+      minHandDetectionConfidence: 0.4,
+      minHandPresenceConfidence: 0.4,
+      minTrackingConfidence: 0.4,
     });
+    try {
+      landmarker = await HandLandmarker.createFromOptions(fileset, options('GPU'));
+      delegateUsed = 'GPU';
+    } catch (err) {
+      // some laptops can't run it on the graphics chip; the CPU is slower but works everywhere
+      console.warn('Hand tracker: GPU failed, using CPU', err);
+      landmarker = await HandLandmarker.createFromOptions(fileset, options('CPU'));
+      delegateUsed = 'CPU';
+    }
   }
 
   async function start(deviceId) {
@@ -55,6 +71,7 @@ export function createHandTracker(video) {
     if (video.currentTime === lastVideoTime) return;
     lastVideoTime = video.currentTime;
     const result = landmarker.detectForVideo(video, performance.now());
+    detections++;
     landmarks = result.landmarks?.[0] ?? null;
     latest = landmarks ? { x: landmarks[INDEX_TIP].x, y: landmarks[INDEX_TIP].y } : null;
   }
@@ -67,6 +84,18 @@ export function createHandTracker(video) {
     get fingertip() { return latest; },
     get landmarks() { return landmarks; },
     get running() { return !!stream; },
+    get loaded() { return !!landmarker; },
+    // a one-line status for the camera preview
+    status() {
+      const secs = (performance.now() - detectStart) / 1000;
+      const rate = secs > 0 ? Math.round(detections / secs) : 0;
+      detections = 0;
+      detectStart = performance.now();
+      if (!stream) return 'No camera running: press Start (not Mouse only)';
+      if (!landmarker) return 'Hand tracker not loaded';
+      if (video.readyState < 2) return 'Waiting for video…';
+      return `${video.videoWidth}x${video.videoHeight} · ${delegateUsed} · ${rate} checks/s · ${landmarks ? 'HAND FOUND' : 'no hand'}`;
+    },
   };
 }
 
