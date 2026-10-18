@@ -2,6 +2,7 @@ import { createStage } from './stage.js';
 import { createOverlay } from './overlay.js';
 import { createJourney } from './journey.js';
 import { createCard, listVoices } from './card.js';
+import { unlockAudio } from './sfx.js';
 import { STOPS } from './stops.js';
 import { createHandTracker, createPointer, listCameras, unlockCameraLabels } from './hands.js';
 import { DEFAULTS, SLIDERS, loadSettings, saveSettings } from './settings.js';
@@ -341,6 +342,7 @@ $('start-btn').addEventListener('click', async () => {
     saveSettings(settings);
     $('settings-camera').value = deviceId;
     await tracker.start(deviceId);
+    $('preview').classList.add('visible');
     $('start').classList.add('hidden');
   } catch (err) {
     console.error(err);
@@ -350,6 +352,8 @@ $('start-btn').addEventListener('click', async () => {
 });
 
 $('mouse-btn').addEventListener('click', () => $('start').classList.add('hidden'));
+// sound effects need a click or key press before the browser lets them play
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, unlockAudio);
 
 // ---------- settings panel ----------
 function setMirror(on) {

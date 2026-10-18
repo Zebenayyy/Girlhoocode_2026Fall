@@ -1,20 +1,16 @@
-# Recorded stories
+# Story recordings
 
-Put a recording here for any stop and it plays instead of the computer voice.
-Name each file after the stop's `id` in `src/stops.js`:
+The game plays `<stop id>.mp3` from this folder for each stop's story. If a file is missing,
+it falls back to the browser's built-in voice.
 
-| File | Stop |
-|---|---|
-| `earth.mp3` | Earth: Mae Jemison |
-| `moon.mp3` | The Moon: Katherine Johnson |
-| `sun.mp3` | The Sun: Cecilia Payne-Gaposchkin |
-| `pluto.mp3` | Pluto: Venetia Burney |
-| `comet.mp3` | A comet: Caroline Herschel |
-| `stars.mp3` | Star colors: Annie Jump Cannon |
-| `horsehead.mp3` | Horsehead Nebula: Williamina Fleming |
-| `pulsar.mp3` | A pulsar: Jocelyn Bell Burnell |
-| `andromeda.mp3` | Andromeda: Henrietta Swan Leavitt |
-| `spiral.mp3` | Spiral galaxy: Vera Rubin |
+These were made with `scripts/make-voice.py`, which uses Piper (free, open-source text-to-speech)
+with the "LJ Speech" voice, trained on public-domain recordings. Each file reads the first two
+sentences of that stop's story in `src/stops.js`.
 
-Read the woman's name, then the story text from `src/stops.js`. Keep each one under about 15 seconds.
-Stops without a file use the computer voice.
+**Changed a story?** Re-record them all:
+
+    python -m pip install --user piper-tts lameenc
+    python scripts/make-voice.py
+
+**Want real voices instead?** Record your own (about 15 seconds each) and save them here with
+the same names: earth, moon, sun, pluto, comet, stars, horsehead, pulsar, andromeda, spiral (.mp3).

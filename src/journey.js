@@ -15,6 +15,7 @@ import { STOPS, SUN_POS, FINALE_POS } from './stops.js';
 import { BUILDERS, createWarp, glowSprite, textSprite } from './bodies.js';
 import { JUNK_INFO, JUNK_ORDER, makeJunk, createJunkCloud } from './junk.js';
 import { FOV } from './stage.js';
+import { whoosh } from './sfx.js';
 
 const VIEW_DIR = new THREE.Vector3(0.28, 0.12, 1).normalize(); // camera sits on this side of each object
 const FRAME = 4.6; // camera distance in object radii
@@ -24,7 +25,7 @@ const HOME_RESET_MS = 40000;
 const JUNK_PER_STOP = 3;
 export const TOTAL_JUNK = JUNK_PER_STOP * (STOPS.length + 1); // every stop + the finale
 // Where junk floats on screen (x, y as fractions), clear of the object, the card and the dashboard.
-const JUNK_SPOTS = [[0.14, 0.32], [0.5, 0.18], [0.24, 0.72]];
+const JUNK_SPOTS = [[0.1, 0.5], [0.5, 0.17], [0.24, 0.74]];
 const FINALE_JUNK_SPOTS = [[0.12, 0.72], [0.88, 0.7], [0.5, 0.79]]; // below the constellation and its text
 
 const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
@@ -93,7 +94,7 @@ export function createJourney({ stage, card, ui }) {
     const pos = center.clone().addScaledVector(VIEW_DIR, s.radius * FRAME);
     // look a little to the right of the object, so it sits left of center and the card fits on the right
     right.crossVectors(VIEW_DIR, new THREE.Vector3(0, 1, 0)).normalize().negate();
-    const target = center.clone().addScaledVector(right, s.radius * 1.15);
+    const target = center.clone().addScaledVector(right, s.radius * 1.55);
     return { pos, look: target, dist: s.radius * FRAME };
   }
 
@@ -190,6 +191,7 @@ export function createJourney({ stage, card, ui }) {
   function collect(piece) {
     if (piece.collectT !== null) return;
     piece.collectT = now;
+    whoosh();
     const fwd = new THREE.Vector3();
     camera.getWorldDirection(fwd);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -385,8 +387,8 @@ export function createJourney({ stage, card, ui }) {
   function hint() {
     if (flight) return '';
     const left = junkLeft();
-    if (state === 'title') return 'Point at Earth and hold to start your mission';
-    if (state === 'tutorial') return 'Point at the glowing light and hold';
+    if (state === 'title') return 'Point at Earth and hold, or move your mouse onto it and click';
+    if (state === 'tutorial') return 'Move to the glowing light and click, or point and hold';
     if (state === 'arrived') {
       return left ? `Grab the junk for fuel, and point at ${STOPS[index].name} to hear her story` : `Point at ${STOPS[index].name} to hear her story`;
     }

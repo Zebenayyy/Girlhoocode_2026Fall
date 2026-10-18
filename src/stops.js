@@ -3,7 +3,8 @@
 // radius:   rough size, used for framing the camera and for pointing at it
 // kind:     which builder in bodies.js draws it
 // distance: the real distance, shown on screen
-// story:    read aloud; keep it to ~30 words so a full run takes about 3 minutes
+// story:    shown in full on the card; the voice reads the first two sentences
+// photo:    her portrait (public/portraits), with a short credit shown under it
 
 export const STOPS = [
   {
@@ -14,10 +15,11 @@ export const STOPS = [
     name: 'Earth',
     distance: 'Low Earth orbit, 400 km up',
     woman: 'Mae Jemison',
+    photo: 'portraits/earth.jpg',
+    photoCredit: "Photo: NASA",
     headline: 'First African American woman in space',
     story:
-      'In 1992, Mae Jemison saw this view from the Space Shuttle Endeavour. ' +
-      'She was the first African American woman in space, and she is a doctor and an engineer too.',
+      "Mae Jemison is a doctor and engineer who became the first African American woman in space in 1992, flying aboard the Space Shuttle Endeavour. Before NASA, she served as a Peace Corps doctor in Sierra Leone and Liberia. Today she works to make space exploration and science more accessible to everyone.",
   },
   {
     id: 'moon',
@@ -27,10 +29,11 @@ export const STOPS = [
     name: 'The Moon',
     distance: '384,000 km from Earth',
     woman: 'Katherine Johnson',
+    photo: 'portraits/moon.jpg',
+    photoCredit: "Photo: NASA, 1983",
     headline: 'Calculated the paths to space and the Moon',
     story:
-      'Katherine Johnson\'s math guided astronauts. John Glenn asked her to check the computer\'s numbers before his flight, ' +
-      'and she helped calculate the path of Apollo 11, the first Moon landing.',
+      "Katherine Johnson was a NASA mathematician whose calculations helped send astronauts into orbit and to the Moon. Before John Glenn's 1962 orbital flight, he asked for her to personally check the computer's numbers. Her story was told in the film Hidden Figures, and she received the Presidential Medal of Freedom in 2015.",
   },
   {
     id: 'sun',
@@ -40,10 +43,11 @@ export const STOPS = [
     name: 'The Sun',
     distance: '150 million km from Earth',
     woman: 'Cecilia Payne-Gaposchkin',
+    photo: 'portraits/sun.jpg',
+    photoCredit: "Photo: Smithsonian Institution / Science Service",
     headline: 'Discovered what stars are made of',
     story:
-      'What is the Sun made of? In 1925, Cecilia Payne-Gaposchkin found the answer: mostly hydrogen and helium. ' +
-      'Experts told her she was wrong. She was right.',
+      "In 1925, Cecilia Payne-Gaposchkin discovered that stars, including our Sun, are made mostly of hydrogen and helium. A leading astronomer convinced her to downplay the result, but she was proven right a few years later. She went on to become the first woman to be a full professor at Harvard.",
   },
   {
     id: 'pluto',
@@ -53,10 +57,11 @@ export const STOPS = [
     name: 'Pluto',
     distance: 'About 6 billion km from Earth',
     woman: 'Venetia Burney',
+    photo: 'portraits/pluto.jpg',
+    photoCredit: "Photo: J. Weston & Sons, about 1929",
     headline: 'Named Pluto at age 11',
     story:
-      'When Pluto was discovered in 1930, an eleven-year-old girl in England named Venetia Burney suggested its name. ' +
-      'The astronomers chose it, and it is still Pluto today.',
+      "When Pluto was discovered in 1930, 11-year-old Venetia Burney from England suggested naming it after the Roman god of the underworld. Her grandfather passed the idea to astronomers, and it was chosen. NASA's New Horizons spacecraft later carried a science instrument named after her.",
   },
   {
     id: 'comet',
@@ -66,10 +71,11 @@ export const STOPS = [
     name: 'A comet',
     distance: 'Falling in from the icy edge of the Solar System',
     woman: 'Caroline Herschel',
+    photo: 'portraits/comet.jpg',
+    photoCredit: "Painting: Melchior Gommar Tieleman, 1829",
     headline: 'Comet hunter, first paid woman scientist',
     story:
-      'Caroline Herschel swept the night sky with her telescope and discovered eight comets. ' +
-      'She became the first woman known to be paid to do science.',
+      "Caroline Herschel discovered eight comets and several nebulae in the late 1700s. She was the first woman known to be paid a salary for scientific work. In 1828, she became the first woman awarded the Gold Medal of the Royal Astronomical Society.",
   },
   {
     id: 'stars',
@@ -79,10 +85,11 @@ export const STOPS = [
     name: 'The colors of stars',
     distance: 'The nearest stars: 4 light-years and beyond',
     woman: 'Annie Jump Cannon',
+    photo: 'portraits/stars.jpg',
+    photoCredit: "Photo: New York World-Telegram, 1922",
     headline: 'Sorted the stars by type',
     story:
-      'Annie Jump Cannon sorted hundreds of thousands of stars by hand, from hottest to coolest: ' +
-      'O, B, A, F, G, K, M. Astronomers still use her system today.',
+      "Annie Jump Cannon developed the star classification system, O B A F G K M, that astronomers still use today. Working at Harvard Observatory, she classified around 350,000 stars, more than anyone in history. She did this while being mostly deaf, which never slowed her work.",
   },
   {
     id: 'horsehead',
@@ -92,10 +99,11 @@ export const STOPS = [
     name: 'Horsehead Nebula',
     distance: 'About 1,400 light-years away',
     woman: 'Williamina Fleming',
+    photo: 'portraits/horsehead.jpg',
+    photoCredit: "Photo: about 1890s, Harvard College Observatory",
     headline: 'Spotted the Horsehead Nebula',
     story:
-      'Williamina Fleming started at Harvard Observatory as a maid and became one of its top astronomers. ' +
-      'In 1888 she spotted this dark horse\'s head on a photograph of the sky.',
+      "Williamina Fleming was first hired at Harvard Observatory as a housekeeper and became one of its most important astronomers. In 1888, she spotted the Horsehead Nebula on a photographic plate. She cataloged over 10,000 stars and discovered dozens of nebulae and hundreds of variable stars.",
   },
   {
     id: 'pulsar',
@@ -105,10 +113,11 @@ export const STOPS = [
     name: 'A pulsar',
     distance: 'About 2,300 light-years away',
     woman: 'Jocelyn Bell Burnell',
+    photo: 'portraits/pulsar.jpg',
+    photoCredit: "Photo: Astronomical Institute, Czech Academy of Sciences (CC BY-SA 3.0)",
     headline: 'Discovered the first pulsar',
     story:
-      'In 1967, student Jocelyn Bell Burnell noticed a tiny repeating blip in her data. ' +
-      'It was the first pulsar: a dead star spinning like a lighthouse. The Nobel Prize went to her supervisor.',
+      "As a graduate student in 1967, Jocelyn Bell Burnell noticed a strange repeating signal in her telescope data, which turned out to be the first pulsar ever found. The 1974 Nobel Prize for the discovery went to her supervisor, not her. In 2018, she won a $3 million prize and donated all of it to help underrepresented students study physics.",
   },
   {
     id: 'andromeda',
@@ -118,10 +127,11 @@ export const STOPS = [
     name: 'Andromeda Galaxy',
     distance: '2.5 million light-years away',
     woman: 'Henrietta Swan Leavitt',
+    photo: 'portraits/andromeda.jpg',
+    photoCredit: "Photo: early 1900s, photographer unknown",
     headline: 'Found a way to measure distances in space',
     story:
-      'Henrietta Leavitt discovered that some blinking stars reveal their true brightness, a way to measure distance. ' +
-      'With it, astronomers proved Andromeda is a whole other galaxy.',
+      "Henrietta Leavitt discovered that pulsing stars called Cepheids reveal their true brightness through how fast they pulse. This gave astronomers a way to measure huge distances in space. Edwin Hubble later used her discovery to prove that Andromeda is a separate galaxy, far beyond our own Milky Way.",
   },
   {
     id: 'spiral',
@@ -131,10 +141,11 @@ export const STOPS = [
     name: 'A spiral galaxy',
     distance: 'Millions of light-years away, and beyond',
     woman: 'Vera Rubin',
+    photo: 'portraits/spiral.jpg',
+    photoCredit: "Photo: Mark Godfrey, courtesy AIP Emilio Segrè Visual Archives",
     headline: 'Found evidence for dark matter',
     story:
-      'Vera Rubin measured how fast stars circle their galaxies. They moved too fast, as if pulled by something invisible. ' +
-      'Her work became key evidence for dark matter.',
+      "Vera Rubin measured how fast stars move around the centers of galaxies and found they move too fast to be explained by visible matter alone. Her work became key evidence for dark matter. In 1965, she became the first woman allowed to officially observe at Palomar Observatory, and a major new telescope observatory is now named after her.",
   },
 ];
 
@@ -143,3 +154,13 @@ export const SUN_POS = STOPS.find((s) => s.id === 'sun').pos;
 
 // Where the closing constellation appears, past the last galaxy.
 export const FINALE_POS = [0, 0, -34000];
+
+// What gets read aloud for a stop: the first two sentences of her story (keeps a full run
+// near 3 minutes), with her name first unless those sentences already open with it.
+// Used by the game and by scripts/make-voice.py, so recordings match.
+export function spokenText(stop) {
+  const sentences = stop.story.match(/[^.!?]+[.!?]+(\s+|$)/g) ?? [stop.story];
+  const spoken = sentences.slice(0, 2).join('').trim();
+  const lastName = stop.woman.split(' ').pop();
+  return spoken.slice(0, 70).includes(lastName) ? spoken : `${stop.woman}. ${spoken}`;
+}

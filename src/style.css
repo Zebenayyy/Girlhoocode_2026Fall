@@ -88,15 +88,17 @@ button.primary { background: #ffcc55; color: #1a1300; border-color: #ffcc55; fon
 .finale h2 { margin: 0; font-size: 5vmin; color: #ffd36b; }
 .finale p { font-size: 2.6vmin; line-height: 1.5; opacity: 0.9; }
 
-/* ---------- info card ---------- */
+/* ---------- info card: portrait on the left half, story on the right ---------- */
 .card {
   position: fixed;
-  top: 53%;
-  right: 4vw;
-  width: min(36vw, 560px);
+  top: 52%;
+  right: 3vw;
+  width: min(50vw, 900px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
   transform: translate(30px, -50%);
-  padding: 2.2vmin 2.6vmin;
-  background: rgba(8, 12, 32, 0.78);
+  background: rgba(8, 12, 32, 0.82);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 210, 120, 0.45);
   border-radius: 16px;
@@ -105,11 +107,23 @@ button.primary { background: #ffcc55; color: #1a1300; border-color: #ffcc55; fon
   pointer-events: none;
   transition: opacity 0.5s, transform 0.5s;
 }
+.card.no-photo { grid-template-columns: 1fr; width: min(36vw, 560px); }
 .card.visible { opacity: 1; transform: translate(0, -50%); }
-.card-name { font-size: 1.8vmin; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.7; }
-.card-woman { font-size: 4.4vmin; font-weight: 700; color: #ffd36b; margin-top: 0.4vmin; }
-.card-headline { font-size: 2.5vmin; margin-top: 0.4vmin; }
-.card-story { font-size: 2.2vmin; line-height: 1.5; opacity: 0.92; margin: 1.4vmin 0 0; }
+.card-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 46vmin;
+  object-fit: cover;
+  object-position: center 20%;
+  border-right: 1px solid rgba(255, 210, 120, 0.35);
+}
+.card-body { padding: 2vmin 2.2vmin; display: flex; flex-direction: column; }
+.card-name { font-size: 1.7vmin; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.7; }
+.card-woman { font-size: 3.8vmin; font-weight: 700; line-height: 1.15; color: #ffd36b; margin-top: 0.4vmin; }
+.card-headline { font-size: 2.2vmin; margin-top: 0.5vmin; }
+.card-story { font-size: 1.95vmin; line-height: 1.5; opacity: 0.92; margin: 1.2vmin 0 0; }
+.card-credit { font-size: 1.25vmin; opacity: 0.5; margin-top: auto; padding-top: 1vmin; }
 
 /* ---------- cockpit frame + dashboard ---------- */
 .cockpit { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
@@ -178,9 +192,9 @@ button.primary { background: #ffcc55; color: #1a1300; border-color: #ffcc55; fon
 .recycled {
   position: fixed;
   top: 19vh;
-  right: 4vw;
+  left: 5.5vw;
   transform: translateY(-10px);
-  width: min(34vw, 520px);
+  width: min(28vw, 460px);
   padding: 1.2vmin 2vmin;
   background: rgba(6, 24, 20, 0.85);
   border: 1px solid rgba(140, 255, 200, 0.5);
@@ -302,10 +316,14 @@ button.primary { background: #ffcc55; color: #1a1300; border-color: #ffcc55; fon
   position: fixed;
   right: 16px;
   bottom: 16px;
+  width: min(480px, calc(100vw - 32px));
   border: 1px solid #3a4680;
   border-radius: 8px;
   overflow: hidden;
   display: none;
+  background: rgba(8, 12, 32, 0.95);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
 }
 .preview.visible { display: block; }
-.preview canvas { display: block; width: 480px; height: 270px; }
+.preview canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.preview-hint { margin: 0; padding: 7px 10px; color: #d7e4ff; font-size: 12px; text-align: center; }

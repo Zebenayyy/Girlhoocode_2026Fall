@@ -1,3 +1,5 @@
+import { spokenText } from './stops.js';
+
 // Info card + the story read aloud.
 // If a recording exists at public/audio/<stop id>.mp3 it plays that; otherwise the
 // browser's most human-sounding voice reads the story.
@@ -38,7 +40,8 @@ export function createCard(el, settings) {
     const u = new SpeechSynthesisUtterance(text);
     const voice = pickVoice();
     if (voice) u.voice = voice;
-    u.rate = 0.95;
+    u.rate = 0.92; // a little slower and lower sounds less harsh
+    u.pitch = 0.95;
     u.onend = onEnd;
     u.onerror = onEnd;
     speechSynthesis.speak(u);
@@ -62,14 +65,25 @@ export function createCard(el, settings) {
     };
 
     el.innerHTML = `
-      <div class="card-name">${stop.name}</div>
-      <div class="card-woman">${stop.woman}</div>
-      <div class="card-headline">${stop.headline}</div>
-      <p class="card-story">${stop.story}</p>`;
+      ${stop.photo ? `<img class="card-photo" src="${BASE}${stop.photo}" alt="Portrait of ${stop.woman}">` : ''}
+      <div class="card-body">
+        <div class="card-name">${stop.name}</div>
+        <div class="card-woman">${stop.woman}</div>
+        <div class="card-headline">${stop.headline}</div>
+        <p class="card-story">${stop.story}</p>
+        ${stop.photoCredit ? `<div class="card-credit">${stop.photoCredit}</div>` : ''}
+      </div>`;
+    el.classList.toggle('no-photo', !stop.photo);
+    // if the portrait can't load, fall back to the text-only card
+    el.querySelector('.card-photo')?.addEventListener('error', (e) => {
+      e.target.remove();
+      el.classList.add('no-photo');
+    });
     el.classList.add('visible');
 
-    const text = `${stop.woman}. ${stop.story}`;
-    const words = text.split(/\s+/).length;
+    // the voice reads the first two sentences (see spokenText in stops.js)
+    const text = spokenText(stop);
+    const words = stop.story.split(/\s+/).length; // reading time for the full card
     clearTimeout(doneTimer);
     stopSound();
 

@@ -64,7 +64,7 @@
       </div>
       <div class="tip" id="tip-planet" data-target="earth">
         <b>Planets, stars and galaxies</b>
-        <span>Point at one and hold to hear the woman who discovered its secrets.</span>
+        <span>Click one, or point and hold, to hear the woman who discovered its secrets.</span>
       </div>
       <div class="tip" id="tip-guide" data-target="guide">
         <b>Your guide</b>
@@ -76,11 +76,11 @@
       </div>
       <div class="tip" id="tip-junk" data-target="junk">
         <b>Junk recycled</b>
-        <span>Every piece you collect is counted here. Clear all 33 to clean up Earth's orbit.</span>
+        <span>Click a piece or point and hold to collect it. Clear all 33 to clean up Earth's orbit.</span>
       </div>
       <div class="tip tip-ready" id="tip-ready" data-target="beacon">
         <b>Try it now</b>
-        <span>Point at the light and hold still until the ring fills.</span>
+        <span>Move here and click, or point and hold until the ring fills.</span>
       </div>
     </div>
 
@@ -125,7 +125,8 @@
         <button id="start-btn" class="primary">Start</button>
         <button id="mouse-btn">Mouse only</button>
       </div>
-      <p id="start-status" class="status"></p>
+      <p id="start-status" class="status" role="status"></p>
+      <p class="keys controls-hint">Camera: point and hold · Mouse: move to an object and click</p>
       <p class="keys">S settings · C camera view · F fullscreen · V voice on/off · M flip left/right · R restart</p>
       <p class="keys credits">
         Images: NASA (Blue Marble, LRO, New Horizons), NASA/Goddard SVS Deep Star Maps (with ESA/Gaia/DPAC),<br />
@@ -155,6 +156,7 @@
 
     <div id="preview" class="preview">
       <canvas id="preview-canvas" width="480" height="270"></canvas>
+      <p class="preview-hint">Center your hand inside the yellow box</p>
     </div>
     <video id="video" playsinline muted></video>
 
