@@ -342,7 +342,7 @@ export function createJourney({ stage, card, ui }) {
   // Each target: { id, x, y, r, kind: 'object' | 'junk' | 'beacon', label, onSelect }
   function beaconTarget(label, onSelect) {
     const { w, h } = stage.size();
-    return { id: `beacon-${label}`, kind: 'beacon', x: w * 0.5, y: h * 0.66, r: Math.min(w, h) * 0.065, label, onSelect };
+    return { id: `beacon-${label}`, kind: 'beacon', x: w * 0.5, y: h * 0.74, r: Math.min(w, h) * 0.065, label, onSelect };
   }
 
   function objectTarget(i, onSelect) {

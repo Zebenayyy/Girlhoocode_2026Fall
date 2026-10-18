@@ -78,7 +78,7 @@ const solarSystem = createSolarSystem(stage, card); // shares the card's soft re
 let solarOwnsCamera = false; // true if the camera was turned on from the solar-system panel
 if (import.meta.env.DEV) window.herSky = { journey, solarSystem }; // e.g. herSky.journey.jumpTo(5) in the console
 
-const HAND_ON_TEXT = 'Point at a planet or spacecraft and hold to fly to it';
+const HAND_ON_TEXT = 'Point and hold on a planet for facts · Pinch and move to rotate · Pinch and push in or pull back to zoom';
 const HAND_OFF_TEXT = 'Turn on the camera to point with your hand, or use the mouse';
 
 function updateSolarHandButton() {
@@ -94,6 +94,7 @@ function enterSolarSystem() {
   solarSystem.start();
   document.body.classList.add('solar-active');
   updateSolarHandButton();
+  if (tracker.running) $('preview').classList.add('visible'); // see your hand and gesture
 }
 
 function returnToJourney() {
@@ -131,6 +132,7 @@ async function toggleSolarHandControls() {
       const deviceId = $('settings-camera').value || settings.cameraId || $('start-camera').value;
       await tracker.start(deviceId);
       solarOwnsCamera = true;
+      $('preview').classList.add('visible');
     }
     updateSolarHandButton();
   } catch (err) {
@@ -146,7 +148,7 @@ async function toggleSolarHandControls() {
 const activeTargets = () => (solarSystem.active ? solarSystem.targets() : journey.targets());
 
 // ---------- interaction state ----------
-const cursor = { x: 0, y: 0, visible: false };
+const cursor = { x: 0, y: 0, visible: false, grab: false };
 const mouse = { x: 0, y: 0, at: -Infinity };
 let lastHandAt = -Infinity;
 let dwellId = null; // target the cursor is currently resting on
@@ -177,6 +179,7 @@ function updateCursor(now, dt) {
     cursor.y = mouse.y;
   }
   cursor.visible = handActive || mouseActive;
+  return handActive;
 }
 
 function updateDwell(dt, targets) {
@@ -245,16 +248,20 @@ function tutorialArrows(targets) {
 // ---------- main loop ----------
 let last = performance.now();
 let lastHint = null;
+let palmSmooth = 0; // smoothed hand size while pinching, for steady zooming
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   const t = now / 1000;
 
   tracker.update();
-  updateCursor(now, dt);
+  const handActive = updateCursor(now, dt);
   journey.update(t, dt, cursor.visible);
-  solarSystem.update(t, dt);
-  const targets = activeTargets();
+  // in the solar system, pinching grabs the view (rotate / zoom) instead of pointing
+  cursor.grab = solarSystem.active && handActive && tracker.pinching;
+  palmSmooth = cursor.grab ? (palmSmooth ? palmSmooth + (tracker.palmSize - palmSmooth) * 0.25 : tracker.palmSize) : 0;
+  solarSystem.update(t, dt, cursor.grab ? { x: cursor.x, y: cursor.y, size: palmSmooth } : null);
+  const targets = cursor.grab ? [] : activeTargets();
   const hovered = updateDwell(dt, targets);
 
   const hint = journey.hint();
@@ -295,13 +302,35 @@ function drawPreview() {
   );
   const lm = tracker.landmarks;
   if (lm) {
+    const px = (p) => (settings.mirror ? 1 - p.x : p.x) * pw;
+    const pinching = tracker.pinching;
+    // the hand's skeleton
+    pctx.strokeStyle = 'rgba(127,209,255,0.8)';
+    pctx.lineWidth = 2;
+    pctx.beginPath();
+    for (const [a, b] of HAND_BONES) {
+      pctx.moveTo(px(lm[a]), lm[a].y * ph);
+      pctx.lineTo(px(lm[b]), lm[b].y * ph);
+    }
+    pctx.stroke();
+    // joints; the index fingertip drives the cursor, and thumb + index light up blue when pinching
     lm.forEach((p, i) => {
-      const x = (settings.mirror ? 1 - p.x : p.x) * pw;
-      pctx.fillStyle = i === 8 ? '#ffd36b' : '#7fd1ff';
+      const tip = i === 8 || (pinching && i === 4);
+      pctx.fillStyle = pinching && (i === 4 || i === 8) ? '#8ce8ff' : i === 8 ? '#ffd36b' : '#7fd1ff';
       pctx.beginPath();
-      pctx.arc(x, p.y * ph, i === 8 ? 5 : 2.5, 0, Math.PI * 2);
+      pctx.arc(px(p), p.y * ph, tip ? 6 : 3, 0, Math.PI * 2);
       pctx.fill();
     });
+    // which gesture the camera sees right now
+    const gesture = pinching
+      ? (solarSystem.active ? 'PINCH · move to rotate, push in / pull back to zoom' : 'PINCH')
+      : 'POINT · hold still on something to select it';
+    pctx.font = '600 14px system-ui';
+    const tw = pctx.measureText(gesture).width + 16;
+    pctx.fillStyle = 'rgba(0,0,0,0.65)';
+    pctx.fillRect(8, ph - 30, tw, 22);
+    pctx.fillStyle = pinching ? '#8ce8ff' : '#ffd36b';
+    pctx.fillText(gesture, 16, ph - 14);
   }
   // live status line, refreshed twice a second
   const now = performance.now();
@@ -314,6 +343,15 @@ function drawPreview() {
 }
 let statusText = '';
 let statusAt = 0;
+
+// which hand points connect (MediaPipe's 21-point hand: wrist, then 4 joints per finger)
+const HAND_BONES = [
+  [0, 1], [1, 2], [2, 3], [3, 4], // thumb
+  [0, 5], [5, 6], [6, 7], [7, 8], // index
+  [5, 9], [9, 10], [10, 11], [11, 12], // middle
+  [9, 13], [13, 14], [14, 15], [15, 16], // ring
+  [13, 17], [0, 17], [17, 18], [18, 19], [19, 20], // pinky + palm
+];
 
 // ---------- mouse fallback ----------
 window.addEventListener('mousemove', (e) => {

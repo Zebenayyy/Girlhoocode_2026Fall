@@ -1,6 +1,8 @@
 // Solar-system explorer (by Kiwakibt): the 8 planets, three spacecraft missions, and facts.
 // Pointing works exactly like the journey: the main cursor, point-and-hold (or click) on a
 // planet or spacecraft to fly to it, and a "Back to the Solar System" light to return.
+// Pinch to grab the view: move left/right/up/down to rotate, push your hand toward the
+// screen to zoom in and pull it back to zoom out. Mouse: drag to rotate, scroll to zoom.
 // Facts are read with the same recorded voice as the journey (public/audio/solar/).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -160,7 +162,7 @@ export function createSolarSystem(stage, narrator) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
-  controls.enableZoom = false;
+  controls.enableZoom = true; // mouse wheel
   controls.minDistance = 12;
   controls.maxDistance = 350;
   controls.enabled = false;
@@ -189,6 +191,7 @@ export function createSolarSystem(stage, narrator) {
   let selectedMissionName = null;
   let infoAnchor = null;
   let infoNarration = '';
+  let grabbed = null; // { x, y, size } of the pinching hand last frame
 
   const IDLE_STATUS = 'Point at a planet or spacecraft and hold to fly to it';
 
@@ -224,6 +227,7 @@ export function createSolarSystem(stage, narrator) {
     camera.updateProjectionMatrix();
     returningToOverview = false;
     focusZoomDistance = null;
+    grabbed = null;
     infoCard.hidden = true;
     infoName = null;
     narrator.silence();
@@ -300,9 +304,34 @@ export function createSolarSystem(stage, narrator) {
     narrator.narrate(`${BASE}audio/solar/${audioId(infoName)}.mp3`, infoNarration, { force });
   }
 
+  // ---------- pinch to rotate and zoom ----------
+  const ROTATE_SPEED = 0.006; // radians per pixel of hand movement
+  const ZOOM_POWER = 2.5; // how strongly pushing/pulling your hand zooms
+
+  function updateGrab(grab) {
+    if (!grab) { grabbed = null; return; }
+    if (!grabbed) { grabbed = { ...grab }; return; } // just started pinching: remember where
+    cameraOffset.copy(camera.position).sub(controls.target);
+    spherical.setFromVector3(cameraOffset);
+    // move left/right/up/down to rotate around what you're looking at
+    spherical.theta -= (grab.x - grabbed.x) * ROTATE_SPEED;
+    spherical.phi = THREE.MathUtils.clamp(spherical.phi + (grab.y - grabbed.y) * ROTATE_SPEED, 0.12, Math.PI - 0.12);
+    // hand closer to the camera looks bigger -> zoom in; farther -> zoom out
+    if (grab.size > 0 && grabbed.size > 0) {
+      const ratio = THREE.MathUtils.clamp(grabbed.size / grab.size, 0.9, 1.1);
+      spherical.radius = THREE.MathUtils.clamp(spherical.radius * ratio ** ZOOM_POWER, controls.minDistance, controls.maxDistance);
+      focusZoomDistance = null; // the person is steering the zoom now
+    }
+    cameraOffset.setFromSpherical(spherical);
+    camera.position.copy(controls.target).add(cameraOffset);
+    grabbed = { ...grab };
+  }
+
   // ---------- per frame ----------
-  function update(t, dt) {
+  // grab: { x, y, size } while a hand is pinching (screen position + hand size), else null
+  function update(t, dt, grab = null) {
     if (!active) return;
+    updateGrab(grab);
     sun.rotation.y = t * 0.04;
     const orbitMultiplier = Number(orbitSpeed.value);
     const spinMultiplier = Number(spinSpeed.value);

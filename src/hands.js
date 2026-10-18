@@ -23,6 +23,8 @@ export function createHandTracker(video) {
   let lastDetectionAt = -Infinity;
   let latest = null; // { x, y } index fingertip in raw camera coords (0..1), or null
   let landmarks = null; // all 21 points of the tracked hand, for the preview
+  let pinched = false; // thumb and index finger touching (with a little hysteresis so it doesn't flicker)
+  let palmSize = 0; // wrist-to-knuckle length on camera; grows as the hand moves toward the camera
   let delegateUsed = '';
   let detections = 0; // frames analyzed, for the debug readout
   let detectStart = performance.now();
@@ -69,6 +71,7 @@ export function createHandTracker(video) {
     stream = null;
     latest = null;
     landmarks = null;
+    pinched = false;
     lastVideoTime = -1;
     lastDetectionAt = -Infinity;
   }
@@ -86,6 +89,17 @@ export function createHandTracker(video) {
     detections++;
     landmarks = result.landmarks?.[0] ?? null;
     latest = landmarks ? { x: landmarks[INDEX_TIP].x, y: landmarks[INDEX_TIP].y } : null;
+    updatePinch();
+  }
+
+  function updatePinch() {
+    if (!landmarks) { pinched = false; return; }
+    const [wrist, thumb, index, knuckle] = [landmarks[0], landmarks[4], landmarks[8], landmarks[9]];
+    palmSize = Math.hypot(wrist.x - knuckle.x, wrist.y - knuckle.y);
+    // thumb-to-index gap, measured in palm lengths so it works near or far from the camera
+    const gap = palmSize > 0 ? Math.hypot(thumb.x - index.x, thumb.y - index.y) / palmSize : Infinity;
+    if (!pinched && gap < 0.3) pinched = true;
+    else if (pinched && gap > 0.45) pinched = false;
   }
 
   return {
@@ -95,6 +109,8 @@ export function createHandTracker(video) {
     update,
     get fingertip() { return latest; },
     get landmarks() { return landmarks; },
+    get pinching() { return pinched; },
+    get palmSize() { return palmSize; },
     get running() { return !!stream; },
     get loaded() { return !!landmarker; },
     // a one-line status for the camera preview

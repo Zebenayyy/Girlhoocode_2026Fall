@@ -41,7 +41,7 @@ export function createOverlay(canvas) {
     ctx.fillStyle = '#fff3d6';
     ctx.font = `600 ${Math.round(unit * 0.03)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(b.label, b.x, b.y + b.r * 1.25 + unit * 0.03);
+    ctx.fillText(b.label, b.x, b.y + b.r * 1.15 + unit * 0.024);
   }
 
   // tractor beam from the ship's nose (bottom center) to a piece of junk being pulled in
@@ -145,7 +145,15 @@ export function createOverlay(canvas) {
       }
     }
 
-    if (cursor.visible) {
+    if (cursor.visible && cursor.grab) {
+      // pinching: a blue "grab" ring instead of the pointer
+      glow(cursor.x, cursor.y, unit * 0.04, 'rgba(120,210,255,0.8)');
+      ctx.strokeStyle = '#8ce8ff';
+      ctx.lineWidth = unit * 0.005;
+      ctx.beginPath();
+      ctx.arc(cursor.x, cursor.y, unit * 0.025, 0, TAU);
+      ctx.stroke();
+    } else if (cursor.visible) {
       if (progress > 0) {
         ctx.strokeStyle = '#ffd36b';
         ctx.lineWidth = unit * 0.008;

@@ -91,13 +91,13 @@ button.primary { background: #ffcc55; color: #1a1300; border-color: #ffcc55; fon
 /* ---------- info card: portrait on the left half, story on the right ---------- */
 .card {
   position: fixed;
-  top: 52%;
+  top: 6vh; /* sits high so it never covers the "Fly to…" light below it */
   right: 3vw;
   width: min(50vw, 900px);
   display: grid;
   grid-template-columns: 1fr 1fr;
   overflow: hidden;
-  transform: translate(30px, -50%);
+  transform: translateX(30px);
   background: rgba(8, 12, 32, 0.82);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 210, 120, 0.45);
@@ -108,12 +108,12 @@ button.primary { background: #ffcc55; color: #1a1300; border-color: #ffcc55; fon
   transition: opacity 0.5s, transform 0.5s;
 }
 .card.no-photo { grid-template-columns: 1fr; width: min(36vw, 560px); }
-.card.visible { opacity: 1; transform: translate(0, -50%); }
+.card.visible { opacity: 1; transform: none; }
 .card-photo {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 46vmin;
+  min-height: 38vmin;
   object-fit: cover;
   object-position: center 20%;
   border-right: 1px solid rgba(255, 210, 120, 0.35);
@@ -122,7 +122,7 @@ button.primary { background: #ffcc55; color: #1a1300; border-color: #ffcc55; fon
 .card-name { font-size: 1.7vmin; letter-spacing: 0.15em; text-transform: uppercase; opacity: 0.7; }
 .card-woman { font-size: 3.8vmin; font-weight: 700; line-height: 1.15; color: #ffd36b; margin-top: 0.4vmin; }
 .card-headline { font-size: 2.2vmin; margin-top: 0.5vmin; }
-.card-story { font-size: 1.95vmin; line-height: 1.5; opacity: 0.92; margin: 1.2vmin 0 0; }
+.card-story { font-size: 1.85vmin; line-height: 1.45; opacity: 0.92; margin: 1vmin 0 0; }
 .card-credit { font-size: 1.25vmin; opacity: 0.5; margin-top: auto; padding-top: 1vmin; }
 
 /* ---------- cockpit frame + dashboard ---------- */
@@ -355,7 +355,6 @@ body.solar-active .card,
 body.solar-active .hint,
 body.solar-active .progress,
 body.solar-active .panel,
-body.solar-active .preview,
 body.solar-active .cockpit,
 body.solar-active .dash,
 body.solar-active .tutorial,
