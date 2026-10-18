@@ -43,27 +43,29 @@ export function createJourney({ stage, card, ui }) {
   const { scene, camera } = stage;
 
   // ---------- build the world ----------
-  scene.add(new THREE.AmbientLight(0xffffff, 0.06));
+  const journeyGroup = new THREE.Group();
+  scene.add(journeyGroup);
+  journeyGroup.add(new THREE.AmbientLight(0xffffff, 0.06));
   const sunLight = new THREE.PointLight(0xfff2dd, 3.2, 0, 0);
   sunLight.position.copy(v3(SUN_POS));
-  scene.add(sunLight);
+  journeyGroup.add(sunLight);
 
   const bodies = STOPS.map((s) => {
     const body = BUILDERS[s.kind](s, { sunPos: SUN_POS });
     body.group.position.copy(v3(s.pos));
-    scene.add(body.group);
+    journeyGroup.add(body.group);
     return body;
   });
-  const warp = createWarp(scene);
+  const warp = createWarp(journeyGroup);
   const cloud = createJunkCloud(v3(STOPS[0].pos), STOPS[0].radius);
-  scene.add(cloud.group);
+  journeyGroup.add(cloud.group);
 
   // finale constellation: hidden until the end
   const finaleCenter = v3(FINALE_POS);
   const constellation = new THREE.Group();
   constellation.position.copy(finaleCenter);
   constellation.visible = false;
-  scene.add(constellation);
+  journeyGroup.add(constellation);
   const conStars = CROWN.map(([x, y], i) => {
     const g = new THREE.Group();
     g.position.set(x * 520, y * 330, 0);
@@ -163,7 +165,7 @@ export function createJourney({ stage, card, ui }) {
   }
 
   function clearJunk() {
-    junk.forEach((j) => scene.remove(j.group));
+    junk.forEach((j) => journeyGroup.remove(j.group));
     junk = [];
   }
 
@@ -179,7 +181,7 @@ export function createJourney({ stage, card, ui }) {
       const base = camera.position.clone().addScaledVector(p, d * (0.9 + k * 0.1));
       piece.group.position.copy(base);
       piece.group.scale.setScalar(0.0001);
-      scene.add(piece.group);
+      journeyGroup.add(piece.group);
       junk.push({
         ...piece, id: `junk-${junkSeq}`, type, base, size,
         phase: Math.random() * Math.PI * 2, spin: 0.3 + Math.random() * 0.5,
@@ -200,7 +202,7 @@ export function createJourney({ stage, card, ui }) {
   }
 
   function finishCollect(piece) {
-    scene.remove(piece.group);
+    journeyGroup.remove(piece.group);
     junk = junk.filter((j) => j !== piece);
     collected++;
     setFuel(fuel + 1 / JUNK_PER_STOP);
@@ -239,6 +241,7 @@ export function createJourney({ stage, card, ui }) {
   let storyDone = false;
   let homeAt = 0;
   let lastActivity = performance.now();
+  let enabled = true;
 
   function goTitle() {
     state = 'title';
@@ -367,6 +370,7 @@ export function createJourney({ stage, card, ui }) {
   const finaleShown = () => finaleT > CROWN.length * 0.45 + 1.5;
 
   function targets() {
+    if (!enabled) return [];
     if (flight) return [];
     if (state === 'title') return [objectTarget(0, showTutorial)].filter(Boolean);
     if (state === 'tutorial') return performance.now() - tutorialAt > 3000 ? [beaconTarget("I'm ready!", startJourney)] : [];
@@ -385,6 +389,7 @@ export function createJourney({ stage, card, ui }) {
   }
 
   function hint() {
+    if (!enabled) return '';
     if (flight) return '';
     const left = junkLeft();
     if (state === 'title') return 'Point at Earth and hold, or move your mouse onto it and click';
@@ -408,6 +413,7 @@ export function createJourney({ stage, card, ui }) {
 
   // ---------- per frame ----------
   function update(t, dt, cursorActive) {
+    if (!enabled) return;
     now = t;
     const ms = performance.now();
     if (cursorActive) lastActivity = ms;
@@ -482,8 +488,26 @@ export function createJourney({ stage, card, ui }) {
   goTitle();
   camera.position.set(0, 10, 60);
 
+  // Turn the journey off while the solar-system explorer is open (and back on after).
+  function setEnabled(on) {
+    enabled = on;
+    journeyGroup.visible = on;
+    if (on) goTitle();
+    else {
+      flight = null;
+      card.hide();
+      clearJunk();
+      ui.setTitle(false);
+      ui.setTutorial(false);
+      ui.setFinale(false);
+      ui.setHome(false);
+      ui.setChapter(null);
+      ui.setProgress(-1);
+    }
+  }
+
   return {
-    update, targets, hint, beams, jumpTo,
+    update, targets, hint, beams, jumpTo, setEnabled,
     get state() { return state; }, get index() { return index; }, get fuel() { return fuel; },
     reset: goTitle,
   };
